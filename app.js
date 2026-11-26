@@ -765,20 +765,222 @@
         btn.disabled = false;
     }
 
+    let catalogPage = 1;
+    const CATALOG_PAGE_SIZE = 24;
+
+    function switchView(viewName) {
+        const valid = ["dashboard", "catalog", "wizard"].includes(viewName) ? viewName : "dashboard";
+        document.querySelectorAll("[data-gh-view]").forEach(sec => {
+            sec.classList.toggle("d-none", sec.getAttribute("data-gh-view") !== valid);
+        });
+        document.querySelectorAll("[data-gh-tab]").forEach(link => {
+            link.classList.toggle("active", link.getAttribute("data-gh-tab") === valid);
+        });
+        if (window.location.hash !== `#${valid}`) {
+            history.replaceState(null, "", `#${valid}`);
+        }
+        if (valid === "catalog") {
+            renderCatalog();
+        }
+    }
+
+    function renderDashboard() {
+        const total = catalog.length;
+        const counts = { Agent: 0, Skill: 0, Rule: 0, Command: 0 };
+        catalog.forEach(c => {
+            const t = normType(c.ComponentType);
+            if (counts[t] !== undefined) counts[t]++;
+        });
+        const denom = Math.max(1, total);
+        if ($("dashTotalBadge")) $("dashTotalBadge").textContent = String(total);
+        if ($("dashReadyTitle")) $("dashReadyTitle").textContent = `已載入 ${total} 筆 ECC 元件（離線可用）`;
+        if ($("dashPodTotal")) $("dashPodTotal").textContent = `${total} 筆已同步元件`;
+
+        [["Agent", "Agent"], ["Skill", "Skill"], ["Rule", "Rule"], ["Command", "Command"]].forEach(([key, suffix]) => {
+            const cntEl = $(`dashCount${suffix}`);
+            const barEl = $(`dashBar${suffix}`);
+            if (cntEl) cntEl.textContent = String(counts[key]);
+            if (barEl) barEl.style.width = `${Math.min(100, Math.max(6, Math.round((counts[key] * 100) / denom)))}%`;
+        });
+    }
+
+    function renderCatalog() {
+        const grid = $("catalogGrid");
+        const pag = $("catalogPagination");
+        const summaryEl = $("catalogFilterSummary");
+        if (!grid || !pag) return;
+
+        const kw = ($("catKeyword")?.value || "").trim().toLowerCase();
+        const typeFilter = $("catType")?.value || "";
+        const roleFilter = ($("catRole")?.value || "").toLowerCase();
+        const stackFilter = ($("catStack")?.value || "").toLowerCase();
+
+        const filtered = catalog.filter(c => {
+            if (typeFilter && normType(c.ComponentType) !== typeFilter) return false;
+            if (roleFilter && !splitTokens(c.SdlcRoles).includes(roleFilter)) return false;
+            if (stackFilter && !splitTokens(c.TechStacks).includes(stackFilter)) return false;
+            if (kw) {
+                const hay = `${c.Name || ""} ${c.Path || ""} ${c.SummaryZh || ""} ${c.DescriptionEn || ""}`.toLowerCase();
+                if (!hay.includes(kw)) return false;
+            }
+            return true;
+        });
+
+        const totalPages = Math.max(1, Math.ceil(filtered.length / CATALOG_PAGE_SIZE));
+        if (catalogPage > totalPages) catalogPage = totalPages;
+        if (catalogPage < 1) catalogPage = 1;
+        const startIdx = (catalogPage - 1) * CATALOG_PAGE_SIZE;
+        const pageItems = filtered.slice(startIdx, startIdx + CATALOG_PAGE_SIZE);
+
+        if (summaryEl) {
+            summaryEl.textContent = `顯示 ${filtered.length} 筆符合元件（知識庫總計 ${catalog.length} 筆｜第 ${catalogPage} / ${totalPages} 頁）`;
+        }
+
+        if (pageItems.length === 0) {
+            grid.innerHTML = `<div class="i3d-pod justify-content-center py-5 text-muted" style="grid-column: 1 / -1;">${renderIcon3D("Inactive", "md", "查無符合元件")}<span>查無符合條件的 ECC 元件，請調整篩選條件。</span></div>`;
+        } else {
+            grid.innerHTML = pageItems.map(item => {
+                const typeName = normType(item.ComponentType);
+                const typeLower = typeName.toLowerCase();
+                const roles = (item.SdlcRoles || "").split(",").map(s => s.trim()).filter(Boolean);
+                const stacks = (item.TechStacks || "").split(",").map(s => s.trim()).filter(Boolean);
+                const summary = item.SummaryZh || item.DescriptionEn || "";
+                const drawerId = `cat-drawer-${item.Id}`;
+                const capsules = [
+                    ...roles.slice(0, 3).map(r => `<span class="i3d-micro-capsule" title="角色：${escapeHtml(r)}">${renderIcon3D(r, "xs", r)}<span>${escapeHtml(r)}</span></span>`),
+                    ...stacks.slice(0, 3).map(s => `<span class="i3d-micro-capsule" title="技術棧：${escapeHtml(s)}">${renderIcon3D(s, "xs", s)}<span>${escapeHtml(s)}</span></span>`)
+                ].join("");
+                const extra = roles.length + stacks.length > 6 ? `<span class="i3d-micro-capsule text-muted">+${roles.length + stacks.length - 6}</span>` : "";
+
+                return `
+                <article class="i3d-component-card i3d-type-${typeLower} i3d-hover-tilt">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div class="d-flex align-items-center gap-2 min-w-0">
+                            ${renderIcon3D(typeName, "md", `${typeName}：${item.Name}`)}
+                            <div class="min-w-0">
+                                <div class="fw-bold text-dark text-truncate" title="${escapeHtml(item.Name)}">${escapeHtml(item.Name)}</div>
+                                <span class="badge bg-light text-dark border small">${escapeHtml(typeName)}</span>
+                            </div>
+                        </div>
+                        <span class="badge bg-secondary-subtle text-secondary small">唯讀</span>
+                    </div>
+                    <div class="i3d-summary-clamp" title="${escapeHtml(summary)}">${escapeHtml(summary)}</div>
+                    <div class="i3d-capsule-row">${capsules}${extra}</div>
+                    <div id="${drawerId}" class="i3d-detail-drawer d-none" data-i3d-drawer>
+                        <div class="mb-1"><strong>完整摘要：</strong>${escapeHtml(summary)}</div>
+                        <div class="mb-1"><strong>檔案路徑：</strong><code>${escapeHtml(item.Path)}</code></div>
+                        <div class="mb-1"><strong>所有角色：</strong>${escapeHtml(roles.join(", ") || "-")}</div>
+                        <div class="mb-1"><strong>所有技術棧：</strong>${escapeHtml(stacks.join(", ") || "-")}</div>
+                        <div class="text-muted small fst-italic">（線上簡易版僅供唯讀瀏覽；如需編輯摘要請安裝 .NET 10 本機完整版）</div>
+                    </div>
+                    <div class="mt-auto pt-2 border-top d-flex justify-content-between align-items-center gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-i3d-toggle="${drawerId}" data-label-closed="展開詳情" data-label-open="收合詳情" aria-expanded="false" aria-controls="${drawerId}">
+                            <span data-i3d-toggle-label>展開詳情</span>
+                        </button>
+                        <a href="${escapeHtml(item.RawUrl)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-dark">Raw</a>
+                    </div>
+                </article>`;
+            }).join("");
+        }
+
+        pag.innerHTML = totalPages <= 1 ? "" : `
+            <span class="small text-muted">每頁 ${CATALOG_PAGE_SIZE} 筆｜目前第 ${catalogPage} / ${totalPages} 頁</span>
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-secondary" id="catPrevBtn" ${catalogPage <= 1 ? "disabled" : ""}>上一頁</button>
+                <button type="button" class="btn btn-outline-secondary" id="catNextBtn" ${catalogPage >= totalPages ? "disabled" : ""}>下一頁</button>
+            </div>`;
+        if ($("catPrevBtn")) $("catPrevBtn").addEventListener("click", () => { catalogPage--; renderCatalog(); grid.scrollIntoView({ behavior: "smooth" }); });
+        if ($("catNextBtn")) $("catNextBtn").addEventListener("click", () => { catalogPage++; renderCatalog(); grid.scrollIntoView({ behavior: "smooth" }); });
+    }
+
+    function initDashboardAndCatalog() {
+        document.querySelectorAll("[data-gh-tab], [data-gh-goto]").forEach(el => {
+            el.addEventListener("click", (e) => {
+                e.preventDefault();
+                const target = el.getAttribute("data-gh-tab") || el.getAttribute("data-gh-goto") || "dashboard";
+                switchView(target);
+            });
+        });
+
+        window.addEventListener("hashchange", () => {
+            const hash = (window.location.hash || "#dashboard").replace(/^#/, "");
+            switchView(hash);
+        });
+
+        document.querySelectorAll("[data-dash-type]").forEach(card => {
+            const go = () => {
+                const t = card.getAttribute("data-dash-type") || "";
+                if ($("catKeyword")) $("catKeyword").value = "";
+                if ($("catRole")) $("catRole").value = "";
+                if ($("catStack")) $("catStack").value = "";
+                if ($("catType")) $("catType").value = t;
+                catalogPage = 1;
+                switchView("catalog");
+            };
+            card.addEventListener("click", go);
+            card.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    go();
+                }
+            });
+        });
+
+        ["catKeyword", "catType", "catRole", "catStack"].forEach(id => {
+            const el = $(id);
+            if (!el) return;
+            const evt = id === "catKeyword" ? "input" : "change";
+            el.addEventListener(evt, () => { catalogPage = 1; renderCatalog(); });
+        });
+
+        if ($("catResetBtn")) {
+            $("catResetBtn").addEventListener("click", () => {
+                if ($("catKeyword")) $("catKeyword").value = "";
+                if ($("catType")) $("catType").value = "";
+                if ($("catRole")) $("catRole").value = "";
+                if ($("catStack")) $("catStack").value = "";
+                catalogPage = 1;
+                renderCatalog();
+            });
+        }
+
+        const grid = $("catalogGrid");
+        if (grid) {
+            grid.addEventListener("click", (e) => {
+                const btn = e.target.closest("[data-i3d-toggle]");
+                if (!btn) return;
+                const target = $(btn.getAttribute("data-i3d-toggle"));
+                if (!target) return;
+                const willOpen = target.classList.contains("d-none");
+                target.classList.toggle("d-none", !willOpen);
+                btn.setAttribute("aria-expanded", willOpen ? "true" : "false");
+                const lbl = btn.querySelector("[data-i3d-toggle-label]");
+                if (lbl) lbl.textContent = willOpen ? (btn.getAttribute("data-label-open") || "收合詳情") : (btn.getAttribute("data-label-closed") || "展開詳情");
+            });
+        }
+
+        const initialHash = (window.location.hash || "#dashboard").replace(/^#/, "");
+        switchView(initialHash);
+    }
+
     async function init() {
         hydrateStaticIcons();
         renderCheckboxes();
         initTactileSelectors();
         applyCompatibility();
         refreshGeminiBadge();
+        initDashboardAndCatalog();
         $("ProjectType").addEventListener("change", applyCompatibility);
 
         try {
             const res = await fetch("data/catalog.json");
             catalog = await res.json();
             $("catalogCountBadge").textContent = `已載入 ${catalog.length} 筆 ECC 元件`;
+            renderDashboard();
+            renderCatalog();
         } catch {
             $("catalogCountBadge").textContent = "知識庫載入失敗";
+            if ($("dashReadyTitle")) $("dashReadyTitle").textContent = "知識庫載入失敗";
         }
 
         $("saveGeminiKeyBtn").addEventListener("click", () => {
