@@ -1,0 +1,92 @@
+@model ECCSELECTION.Web.ViewModels.EccComponentEditViewModel
+@{
+    ViewData["Title"] = $"編輯元件 - {Model.Name}";
+}
+
+@if (TempData["CatalogMessage"] is string msg)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @msg
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="關閉"></button>
+    </div>
+}
+
+<div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+    <div class="card-header bg-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <div class="i3d-float">
+                <partial name="_Icon3D" model='(Model.ComponentType.ToString(), "lg", $"{Model.ComponentType}：{Model.Name}")' />
+            </div>
+            <div>
+                <h2 class="h4 mb-1 fw-bold">
+                    @Model.Name
+                    <span class="badge bg-secondary ms-2">@Model.ComponentType</span>
+                </h2>
+                <div class="small text-muted"><code>@Model.Path</code></div>
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="@Model.HtmlUrl" target="_blank" rel="noopener" class="btn btn-sm btn-outline-dark">GitHub 檢視</a>
+            <a href="@Model.RawUrl" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">Raw 下載</a>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="i3d-pod mb-4 border-warning-subtle bg-warning-subtle">
+            <partial name="_Icon3D" model='("Lock", "md", "人工編輯保護鎖定盾牌")' />
+            <div class="small">
+                <strong>人工編輯保護說明：</strong>儲存變更後，系統會將此元件標記為 <code>IsManuallyEdited = true</code>。未來從 GitHub 同步更新時，將保留您的中文摘要、角色、技術棧與架構標籤，不會被自動覆寫。
+            </div>
+        </div>
+
+        <form asp-action="Edit" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="Id" />
+            <input type="hidden" asp-for="ComponentType" />
+            <input type="hidden" asp-for="Name" />
+            <input type="hidden" asp-for="Path" />
+            <input type="hidden" asp-for="RawUrl" />
+            <input type="hidden" asp-for="HtmlUrl" />
+            <input type="hidden" asp-for="DescriptionEn" />
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">英文原始描述 (DescriptionEn)</label>
+                <div class="form-control bg-light" readonly>@Model.DescriptionEn</div>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="SummaryZh" class="form-label fw-semibold"></label>
+                <textarea asp-for="SummaryZh" class="form-control" rows="3"></textarea>
+                <span asp-validation-for="SummaryZh" class="text-danger small"></span>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label asp-for="SdlcRoles" class="form-label fw-semibold"></label>
+                    <input asp-for="SdlcRoles" class="form-control" placeholder="例如：SA,SD,PG_BE" />
+                    <div class="form-text">可用值：SA, SD, PG_FE, PG_BE, PG_DB, PG_TEST, QA</div>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="TechStacks" class="form-label fw-semibold"></label>
+                    <input asp-for="TechStacks" class="form-control" placeholder="例如：dotnet,sqlserver,common" />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="ArchStyles" class="form-label fw-semibold"></label>
+                    <input asp-for="ArchStyles" class="form-control" placeholder="例如：mvc,clean,general" />
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="UsageGuide" class="form-label fw-semibold"></label>
+                <textarea asp-for="UsageGuide" class="form-control" rows="3"></textarea>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary d-inline-flex align-items-center gap-2">
+                    <partial name="_Icon3D" model='("Rule", "xs", "儲存並鎖定")' />
+                    <span>儲存並鎖定人工編輯</span>
+                </button>
+                <a asp-action="Index" class="btn btn-outline-secondary">返回知識庫</a>
+            </div>
+        </form>
+    </div>
+</div>

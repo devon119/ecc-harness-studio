@@ -1,0 +1,98 @@
+﻿<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - ECCSELECTION 知識庫與 Harness 選型系統</title>
+    <script type="importmap"></script>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/icon3d.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/ECCSELECTION.Web.styles.css" asp-append-version="true" />
+</head>
+<body class="i3d-body">
+    <header>
+        <nav class="navbar navbar-expand-lg navbar-dark i3d-navbar shadow-sm mb-4">
+            <div class="container">
+                <a class="navbar-brand fw-bold d-inline-flex align-items-center gap-2" asp-controller="Home" asp-action="Index">
+                    <partial name="_Icon3D" model='("Agent", "sm", "ECCSELECTION 3D 核心標誌")' />
+                    <span>ECCSELECTION</span>
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="切換導覽列">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="mainNavbar">
+                    <ul class="navbar-nav me-auto mb-2 mb-lg-0 gap-1">
+                        <li class="nav-item">
+                            <a class="nav-link i3d-nav-pill" asp-controller="Home" asp-action="Index">
+                                <partial name="_Icon3D" model='("Fullstack", "xs", "首頁儀表板")' />
+                                <span>首頁儀表板</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link i3d-nav-pill" asp-controller="Wizard" asp-action="Index">
+                                <partial name="_Icon3D" model='("Skill", "xs", "互動式組建問券")' />
+                                <span>互動式組建問券</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link i3d-nav-pill" asp-controller="Catalog" asp-action="Index">
+                                <partial name="_Icon3D" model='("Rule", "xs", "ECC 知識庫")' />
+                                <span>ECC 知識庫</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link i3d-nav-pill" asp-controller="Sync" asp-action="Index">
+                                <partial name="_Icon3D" model='("Command", "xs", "GitHub 同步紀錄")' />
+                                <span>GitHub 同步紀錄</span>
+                            </a>
+                        </li>
+                    </ul>
+                    <form asp-controller="Sync" asp-action="Trigger" method="post" class="d-flex">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                        <button type="submit" class="btn btn-outline-info btn-sm d-inline-flex align-items-center gap-1">
+                            <partial name="_Icon3D" model='("Running", "xs", "從 GitHub 同步")' />
+                            <span>從 GitHub 同步最新 ECC</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <div class="container pb-5">
+        @if (TempData["SyncMessage"] is string syncMsg)
+        {
+            var syncStatus = TempData["SyncStatus"]?.ToString();
+            var alertClass = syncStatus switch
+            {
+                "Success" => "alert-success",
+                "PartialSuccess" => "alert-warning",
+                _ => "alert-danger"
+            };
+            <div class="alert @alertClass alert-dismissible fade show" role="alert">
+                <strong>同步通知：</strong> @syncMsg
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="關閉"></button>
+            </div>
+        }
+
+        <main role="main">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="border-top footer text-muted bg-white py-3 mt-auto">
+        <div class="container d-flex justify-content-between">
+            <span>&copy; 2026 ECCSELECTION — Everything Claude Code 知識庫與 Harness 選型系統</span>
+            <span class="small">資料來源：<a href="https://github.com/affaan-m/ECC" target="_blank" rel="noopener">affaan-m/ECC</a></span>
+        </div>
+    </footer>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/icon3d.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

@@ -1,0 +1,229 @@
+﻿@model ECCSELECTION.Web.ViewModels.SyncDashboardViewModel
+@using ECCSELECTION.Web.Models.Enums
+@{
+    ViewData["Title"] = "首頁儀表板";
+    var totalActive = Math.Max(1, Model.ActiveComponents);
+    var agentPct = Math.Clamp((int)Math.Round(Model.AgentCount * 100.0 / totalActive), 6, 100);
+    var skillPct = Math.Clamp((int)Math.Round(Model.SkillCount * 100.0 / totalActive), 6, 100);
+    var rulePct = Math.Clamp((int)Math.Round(Model.RuleCount * 100.0 / totalActive), 6, 100);
+    var cmdPct = Math.Clamp((int)Math.Round(Model.CommandCount * 100.0 / totalActive), 6, 100);
+}
+
+<div class="i3d-hero-panel p-4 p-md-5 mb-4">
+    <div class="row align-items-center g-4">
+        <div class="col-lg-8">
+            <div class="d-inline-flex align-items-center gap-2 mb-2 px-3 py-1 rounded-pill bg-primary-subtle text-primary small fw-semibold">
+                <partial name="_Icon3D" model='("Bundle", "xs", "ECC 3D 空間儀表板")' />
+                <span>ECCSELECTION 3D 空間選型儀表板</span>
+            </div>
+            <h1 class="display-6 fw-bold mb-2">ECC 知識庫與智慧選型系統</h1>
+            <p class="text-muted mb-4">
+                同步 <code>@Model.GitHubRepoFullName</code> 的 Agents、Skills、Rules 與 Commands，透過 3D 視覺化圖譜與確定性 SDLC 問券演算法為專案組建精準 AI Harness。
+            </p>
+            <div class="d-flex flex-wrap gap-2">
+                <a asp-controller="Wizard" asp-action="Index" class="btn btn-primary btn-lg d-inline-flex align-items-center gap-2 shadow-sm">
+                    <partial name="_Icon3D" model='("Agent", "xs", "開始組建問券")' />
+                    <span>開始組建問券 (Harness Wizard)</span>
+                </a>
+                <a asp-controller="Catalog" asp-action="Index" class="btn btn-outline-secondary btn-lg d-inline-flex align-items-center gap-2">
+                    <partial name="_Icon3D" model='("Skill", "xs", "瀏覽知識庫")' />
+                    <span>瀏覽知識庫 (@Model.ActiveComponents)</span>
+                </a>
+                <form asp-controller="Sync" asp-action="Trigger" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="returnUrl" value="@Url.Action("Index", "Home")" />
+                    <button type="submit" class="btn btn-success btn-lg d-inline-flex align-items-center gap-2 shadow-sm">
+                        <partial name="_Icon3D" model='("Success", "xs", "同步最新 ECC")' />
+                        <span>從 GitHub 同步最新 ECC</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="i3d-pod flex-column align-items-stretch">
+                <div class="d-flex align-items-center justify-content-between">
+                    <span class="text-uppercase text-muted small fw-bold">最近同步狀態燈塔</span>
+                    @if (Model.LatestSync is not null)
+                    {
+                        var statusKind = Model.LatestSync.Status.ToString();
+                        <div class="i3d-pod-pulse @(Model.LatestSync.Status == SyncStatus.Success ? "is-online" : "")">
+                            <partial name="_Icon3D" model='(statusKind, "md", $"同步狀態：{Model.LatestSync.Status}")' />
+                        </div>
+                    }
+                    else
+                    {
+                        <partial name="_Icon3D" model='("PartialSuccess", "md", "尚未執行同步")' />
+                    }
+                </div>
+
+                @if (Model.LatestSync is null)
+                {
+                    <div class="mt-2">
+                        <div class="text-warning fw-bold">尚未執行過 GitHub 同步</div>
+                        <p class="small text-muted mb-0 mt-1">請點擊「從 GitHub 同步最新 ECC」初始化本地 SQLite 知識庫。</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="d-flex align-items-center gap-2 mt-1">
+                        <span class="badge @(Model.LatestSync.Status == SyncStatus.Success ? "bg-success" : Model.LatestSync.Status == SyncStatus.PartialSuccess ? "bg-warning text-dark" : "bg-danger")">
+                            @Model.LatestSync.Status
+                        </span>
+                        <span class="small text-muted">@Model.LatestSync.StartedAt.ToString("yyyy-MM-dd HH:mm") UTC</span>
+                    </div>
+                    <div class="i3d-capsule-row mt-2">
+                        <span class="i3d-micro-capsule" title="掃描總數">掃描 @Model.LatestSync.TotalFound</span>
+                        <span class="i3d-micro-capsule text-success" title="新增元件">+@Model.LatestSync.AddedCount 新增</span>
+                        <span class="i3d-micro-capsule text-primary" title="更新元件">~@Model.LatestSync.UpdatedCount 更新</span>
+                        <span class="i3d-micro-capsule text-danger" title="下架元件">-@Model.LatestSync.RemovedCount 下架</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4 i3d-stage">
+    <div class="col-6 col-md-3">
+        <a asp-controller="Catalog" asp-action="Index" asp-route-ComponentType="Agent" class="text-decoration-none">
+            <div class="i3d-pillar-card i3d-pillar-accent-agent i3d-hover-tilt">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <div class="text-muted small fw-semibold">Agents</div>
+                        <div class="small text-secondary">角色代理核心</div>
+                    </div>
+                    <div class="i3d-float">
+                        <partial name="_Icon3D" model='("Agent", "lg", "Agents 3D 神經核心立方體")' />
+                    </div>
+                </div>
+                <div class="fs-2 fw-bold text-primary mb-2">@Model.AgentCount</div>
+                <div class="i3d-pillar-bar-track" aria-hidden="true">
+                    <div class="i3d-pillar-bar-fill bg-primary" style="width: @agentPct%"></div>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-6 col-md-3">
+        <a asp-controller="Catalog" asp-action="Index" asp-route-ComponentType="Skill" class="text-decoration-none">
+            <div class="i3d-pillar-card i3d-pillar-accent-skill i3d-hover-tilt">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <div class="text-muted small fw-semibold">Skills</div>
+                        <div class="small text-secondary">技能工作流</div>
+                    </div>
+                    <div class="i3d-float">
+                        <partial name="_Icon3D" model='("Skill", "lg", "Skills 3D 工作流棱鏡")' />
+                    </div>
+                </div>
+                <div class="fs-2 fw-bold text-success mb-2">@Model.SkillCount</div>
+                <div class="i3d-pillar-bar-track" aria-hidden="true">
+                    <div class="i3d-pillar-bar-fill bg-success" style="width: @skillPct%"></div>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-6 col-md-3">
+        <a asp-controller="Catalog" asp-action="Index" asp-route-ComponentType="Rule" class="text-decoration-none">
+            <div class="i3d-pillar-card i3d-pillar-accent-rule i3d-hover-tilt">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <div class="text-muted small fw-semibold">Rules</div>
+                        <div class="small text-secondary">開發規範防線</div>
+                    </div>
+                    <div class="i3d-float">
+                        <partial name="_Icon3D" model='("Rule", "lg", "Rules 3D 防禦盾牌")' />
+                    </div>
+                </div>
+                <div class="fs-2 fw-bold text-warning mb-2">@Model.RuleCount</div>
+                <div class="i3d-pillar-bar-track" aria-hidden="true">
+                    <div class="i3d-pillar-bar-fill bg-warning" style="width: @rulePct%"></div>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-6 col-md-3">
+        <a asp-controller="Catalog" asp-action="Index" asp-route-ComponentType="Command" class="text-decoration-none">
+            <div class="i3d-pillar-card i3d-pillar-accent-command i3d-hover-tilt">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <div class="text-muted small fw-semibold">Commands</div>
+                        <div class="small text-secondary">快速終端指令</div>
+                    </div>
+                    <div class="i3d-float">
+                        <partial name="_Icon3D" model='("Command", "lg", "Commands 3D 終端機鍵帽")' />
+                    </div>
+                </div>
+                <div class="fs-2 fw-bold text-info mb-2">@Model.CommandCount</div>
+                <div class="i3d-pillar-bar-track" aria-hidden="true">
+                    <div class="i3d-pillar-bar-fill bg-info" style="width: @cmdPct%"></div>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h2 class="h6 fw-bold text-muted text-uppercase mb-0">系統環境狀態燈塔（Telemetry Pods）</h2>
+    <a asp-controller="Sync" asp-action="Index" class="btn btn-sm btn-link text-decoration-none">檢視完整 3D 同步時間軸 &rarr;</a>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-4">
+        <div class="i3d-pod i3d-hover-tilt">
+            <div class="i3d-pod-pulse is-online">
+                <partial name="_Icon3D" model='("API", "md", "上游 GitHub 儲存庫節點")' />
+            </div>
+            <div>
+                <div class="small text-muted">上游來源節點</div>
+                <div class="fw-bold text-dark">@Model.GitHubRepoFullName</div>
+                <span class="badge bg-primary-subtle text-primary mt-1">ECC 知識庫連線</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="i3d-pod i3d-hover-tilt">
+            <div class="i3d-pod-pulse @(Model.HasGitHubToken ? "is-online" : "")">
+                <partial name="_Icon3D" model='("Token", "md", "GitHub Token 鑰匙狀態")' />
+            </div>
+            <div>
+                <div class="small text-muted">GitHub Token 狀態</div>
+                @if (Model.HasGitHubToken)
+                {
+                    <div class="fw-bold text-success">已設定 (5000 req/hr)</div>
+                    <span class="badge bg-success-subtle text-success mt-1">高頻授權通道</span>
+                }
+                else
+                {
+                    <div class="fw-bold text-secondary">未設定 (匿名 60 req/hr)</div>
+                    <span class="badge bg-secondary-subtle text-secondary mt-1">標準公開通道</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="i3d-pod i3d-hover-tilt">
+            <div class="i3d-pod-pulse @(Model.LlmEnabled ? "is-online" : "")">
+                <partial name="_Icon3D" model='("Llm", "md", "LLM 中文摘要與精選引擎")' />
+            </div>
+            <div>
+                <div class="small text-muted">LLM 中文摘要增強</div>
+                @if (Model.LlmEnabled)
+                {
+                    <div class="fw-bold text-success">已啟用 Gemini API</div>
+                    <span class="badge bg-success-subtle text-success mt-1">智慧精選模式</span>
+                }
+                else
+                {
+                    <div class="fw-bold text-secondary">未啟用 API Key</div>
+                    <span class="badge bg-secondary-subtle text-secondary mt-1">確定性規則降級</span>
+                }
+            </div>
+        </div>
+    </div>
+</div>

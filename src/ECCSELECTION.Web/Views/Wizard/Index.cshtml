@@ -1,0 +1,706 @@
+@using ECCSELECTION.Web.Services
+@model ECCSELECTION.Web.ViewModels.WizardRequestViewModel
+@{
+    ViewData["Title"] = "互動式組建問券 (Harness Wizard)";
+    var projectTypes = new (string Value, string Title, string Sub)[]
+    {
+        ("Web", "Web", "網站應用"),
+        ("Mobile", "Mobile", "行動裝置 App"),
+        ("API", "API", "後端微服務"),
+        ("Fullstack", "Fullstack", "前後端全端"),
+        ("Game", "Game", "遊戲開發 / Unity / Godot")
+    };
+    var lifecycles = new (string Value, string Title, string Sub)[]
+    {
+        ("Greenfield", "Greenfield", "新專案從零建置"),
+        ("Brownfield", "Brownfield", "舊專案導入與重構")
+    };
+    var archStyles = new (string Value, string Sub)[]
+    {
+        ("MVC", "三層式架構"),
+        ("Clean", "領域核心分層"),
+        ("MVVM", "雙向資料綁定"),
+        ("ECS", "實體元件系統")
+    };
+    var modes = new (string Value, string Title, string Sub)[]
+    {
+        ("Compact", "Compact", "精簡核心推薦"),
+        ("Comprehensive", "Comprehensive", "完整參考清單")
+    };
+    var activeRule = WizardCompatibility.GetRule(Model.ProjectType) ?? WizardCompatibility.Rules["Web"];
+    var techStacks = new (string Slug, string Label)[]
+    {
+        ("dotnet", ".NET / C#"),
+        ("kotlin", "Kotlin / Android"),
+        ("react", "React"),
+        ("vue", "Vue.js"),
+        ("python", "Python"),
+        ("go", "Go (Golang)"),
+        ("java", "Java / Spring"),
+        ("luau", "Roblox Luau / Lua"),
+        ("godot", "Godot / GDScript"),
+        ("cpp", "C++"),
+        ("sqlserver", "SQL Server"),
+        ("sqlite", "SQLite"),
+        ("postgres", "PostgreSQL"),
+        ("mysql", "MySQL")
+    };
+    var sdlcRoles = new (string Code, string Label)[]
+    {
+        ("SA", "SA (系統分析)"),
+        ("SD", "SD (系統設計)"),
+        ("PG_FE", "PG-前端"),
+        ("PG_BE", "PG-後端"),
+        ("PG_DB", "PG-資料庫"),
+        ("PG_TEST", "PG-測試"),
+        ("QA", "QA (品保審查)")
+    };
+}
+
+<div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+    <div class="card-header bg-white py-3 d-flex align-items-center gap-3">
+        <partial name="_Icon3D" model='("Wizard", "lg", "互動式組建問券 3D 圖騰")' />
+        <div>
+            <h2 class="h4 mb-1 fw-bold">互動式組建問券（3D Tactile Harness Wizard）</h2>
+            <p class="text-muted small mb-0">點擊 3D 觸控方塊選擇專案型態、技術棧與防堵卡點（Guardrails），一鍵組建完整的 AI Harness。</p>
+        </div>
+    </div>
+    <div class="card-body">
+        <form asp-action="Recommend" method="post" enctype="multipart/form-data" id="wizardForm">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="All" class="text-danger mb-3"></div>
+            <div id="requirementKeywordsContainer">
+                @foreach (var kw in Model.RequirementKeywords)
+                {
+                    <input type="hidden" name="RequirementKeywords" value="@kw" />
+                }
+            </div>
+
+            <div class="card border border-primary-subtle bg-light-subtle mb-4 rounded-4">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
+                        <h3 class="h6 fw-bold mb-0 text-primary d-inline-flex align-items-center gap-2">
+                            <partial name="_Icon3D" model='("Llm", "xs", "需求分析引擎")' />
+                            <span>0. 專案用途說明與需求文件上傳（選填，可自動推薦與加權）</span>
+                        </h3>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="analyzeReqBtn">
+                            分析需求並自動建議條件
+                        </button>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label asp-for="ProjectPurpose" class="form-label small fw-semibold">專案用途與核心需求描述</label>
+                            <textarea asp-for="ProjectPurpose" class="form-control" rows="3"
+                                      placeholder="例如：建立一個 .NET 10 遊戲儲值微服務，需支援 PostgreSQL、高並發防重放與嚴格安全稽核..."></textarea>
+                        </div>
+                        <div class="col-md-4">
+                            <label asp-for="RequirementDocument" class="form-label small fw-semibold">上傳需求文件（.md / .txt / .json / .yaml / .csv / .xml，最大 2MB）</label>
+                            <input asp-for="RequirementDocument" class="form-control" type="file"
+                                   accept=".md,.txt,.json,.yaml,.yml,.csv,.xml" />
+                            <div class="form-text">系統將確定性解析文件關鍵字與技術棧，不會外傳給第三方 LLM。</div>
+                        </div>
+                    </div>
+                    <div id="analysisStatusBox" class="alert alert-info mt-3 mb-0 py-2 small d-none"></div>
+
+                    <div class="mt-3 pt-2 border-top">
+                        @{
+                            var isGeminiConfigured = ViewBag.IsGeminiApiConfigured is true;
+                        }
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <span class="small">
+                                <strong>Gemini LLM 精選引擎：</strong>
+                                <span id="geminiConfigBadge" class="badge @(isGeminiConfigured ? "bg-success" : "bg-secondary")">
+                                    @(isGeminiConfigured ? "已啟用 Gemini API（自動深度分析與精選）" : "未設定 API Key（使用確定性收斂，或於結果頁使用 Chrome Gemini 接力）")
+                                </span>
+                            </span>
+                            <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#geminiSetupPanel">
+                                申請與設定 Gemini API Key 引導
+                            </button>
+                        </div>
+                        <div class="collapse mt-2" id="geminiSetupPanel">
+                            <div class="p-3 border rounded bg-white small">
+                                <div class="fw-semibold mb-1">免費取得 Google AI Studio Gemini API Key（3 步驟）：</div>
+                                <ol class="mb-2 ps-3">
+                                    <li>前往 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio API Keys</a> 並使用 Google 帳號登入。</li>
+                                    <li>點擊 <strong>Create API key</strong> 建立一組免費金鑰並複製。</li>
+                                    <li>貼入下方欄位儲存（金鑰僅寫入本機 <code>appsettings.Development.local.json</code>，已排除於 Git 版控之外；若無 Key 亦可於推薦結果頁使用 Chrome Gemini 網頁版接力模式）。</li>
+                                </ol>
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-md-6">
+                                        <label class="form-label mb-1 fw-semibold" for="geminiApiKeyInput">Gemini API Key</label>
+                                        <input type="password" class="form-control form-control-sm" id="geminiApiKeyInput" placeholder="AIza..." autocomplete="off" />
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label mb-1 fw-semibold" for="geminiModelInput">模型名稱</label>
+                                        <input type="text" class="form-control form-control-sm" id="geminiModelInput" value="gemini-2.5-flash" />
+                                    </div>
+                                    <div class="col-md-3">
+                                        <button type="button" class="btn btn-sm btn-primary w-100" id="saveGeminiKeyBtn">儲存至本機設定</button>
+                                    </div>
+                                </div>
+                                <div id="geminiSaveStatus" class="mt-2 d-none"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-12">
+                    <label asp-for="ProjectType" class="form-label fw-semibold">1. 專案型態</label>
+                    <select asp-for="ProjectType" class="form-select visually-hidden" aria-hidden="true" tabindex="-1">
+                        @foreach (var pt in projectTypes)
+                        {
+                            <option value="@pt.Value">@pt.Title（@pt.Sub）</option>
+                        }
+                    </select>
+                    <div class="row g-2">
+                        @foreach (var pt in projectTypes)
+                        {
+                            var selected = string.Equals(Model.ProjectType, pt.Value, StringComparison.OrdinalIgnoreCase);
+                            <div class="col-6 col-md-4 col-lg">
+                                <div class="i3d-selector-tile @(selected ? "is-selected" : "")"
+                                     role="button"
+                                     tabindex="0"
+                                     data-select-target="ProjectType"
+                                     data-select-value="@pt.Value"
+                                     aria-pressed="@(selected ? "true" : "false")"
+                                     aria-label="專案型態：@pt.Title（@pt.Sub）">
+                                    <partial name="_Icon3D" model='(pt.Value, "md", $"{pt.Title} 3D 圖示")' />
+                                    <div>
+                                        <div class="i3d-tile-title">@pt.Title</div>
+                                        <div class="i3d-tile-sub">@pt.Sub</div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <label asp-for="ProjectLifecycle" class="form-label fw-semibold">2. 專案導入階段</label>
+                    <select asp-for="ProjectLifecycle" class="form-select visually-hidden" aria-hidden="true" tabindex="-1">
+                        @foreach (var lc in lifecycles)
+                        {
+                            <option value="@lc.Value">@lc.Sub（@lc.Title）</option>
+                        }
+                    </select>
+                    <div class="row g-2">
+                        @foreach (var lc in lifecycles)
+                        {
+                            var selected = string.Equals(Model.ProjectLifecycle, lc.Value, StringComparison.OrdinalIgnoreCase);
+                            <div class="col-6">
+                                <div class="i3d-selector-tile @(selected ? "is-selected" : "")"
+                                     role="button"
+                                     tabindex="0"
+                                     data-select-target="ProjectLifecycle"
+                                     data-select-value="@lc.Value"
+                                     aria-pressed="@(selected ? "true" : "false")"
+                                     aria-label="導入階段：@lc.Sub">
+                                    <partial name="_Icon3D" model='(lc.Value, "sm", $"{lc.Title} 3D 圖示")' />
+                                    <div>
+                                        <div class="i3d-tile-title">@lc.Title</div>
+                                        <div class="i3d-tile-sub">@lc.Sub</div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-lg-5">
+                    <label asp-for="ArchStyle" class="form-label fw-semibold">3. 架構風格</label>
+                    <select asp-for="ArchStyle" class="form-select visually-hidden" aria-hidden="true" tabindex="-1">
+                        @foreach (var arch in archStyles)
+                        {
+                            var isAllowedArch = activeRule.AllowedArchStyles.Contains(arch.Value, StringComparer.OrdinalIgnoreCase);
+                            <option value="@arch.Value" disabled="@(!isAllowedArch)">@arch.Value@(isAllowedArch ? "" : "（不適用）")</option>
+                        }
+                    </select>
+                    <div class="row g-2">
+                        @foreach (var arch in archStyles)
+                        {
+                            var isAllowedArch = activeRule.AllowedArchStyles.Contains(arch.Value, StringComparer.OrdinalIgnoreCase);
+                            var selected = isAllowedArch && string.Equals(Model.ArchStyle, arch.Value, StringComparison.OrdinalIgnoreCase);
+                            <div class="col-6 col-sm-3">
+                                <div class="i3d-selector-tile @(selected ? "is-selected" : "") @(isAllowedArch ? "" : "is-disabled")"
+                                     role="button"
+                                     tabindex="0"
+                                     data-select-target="ArchStyle"
+                                     data-select-value="@arch.Value"
+                                     aria-pressed="@(selected ? "true" : "false")"
+                                     aria-disabled="@(isAllowedArch ? "false" : "true")"
+                                     aria-label="架構風格：@arch.Value（@arch.Sub）">
+                                    <partial name="_Icon3D" model='(arch.Value, "sm", $"{arch.Value} 3D 架構圖示")' />
+                                    <div>
+                                        <div class="i3d-tile-title">@arch.Value</div>
+                                        <div class="i3d-tile-sub">@arch.Sub</div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-lg-3">
+                    <label asp-for="Mode" class="form-label fw-semibold">4. 推薦模式</label>
+                    <select asp-for="Mode" class="form-select visually-hidden" aria-hidden="true" tabindex="-1">
+                        @foreach (var m in modes)
+                        {
+                            <option value="@m.Value">@m.Title（@m.Sub）</option>
+                        }
+                    </select>
+                    <div class="row g-2">
+                        @foreach (var m in modes)
+                        {
+                            var selected = string.Equals(Model.Mode, m.Value, StringComparison.OrdinalIgnoreCase);
+                            <div class="col-6">
+                                <div class="i3d-selector-tile @(selected ? "is-selected" : "")"
+                                     role="button"
+                                     tabindex="0"
+                                     data-select-target="Mode"
+                                     data-select-value="@m.Value"
+                                     aria-pressed="@(selected ? "true" : "false")"
+                                     aria-label="推薦模式：@m.Title（@m.Sub）">
+                                    <partial name="_Icon3D" model='(m.Value, "sm", $"{m.Title} 3D 圖示")' />
+                                    <div>
+                                        <div class="i3d-tile-title">@m.Title</div>
+                                        <div class="i3d-tile-sub">@m.Sub</div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label fw-semibold">5. 技術棧與資料庫（依專案型態自動過濾適用項目；未選中的專屬語言將自動排除衝突規範）</label>
+                    <div class="row g-2">
+                        @foreach (var stack in techStacks)
+                        {
+                            var isAllowed = activeRule.AllowedTechStacks.Contains(stack.Slug, StringComparer.OrdinalIgnoreCase);
+                            var isChecked = isAllowed && Model.TechStacks.Contains(stack.Slug, StringComparer.OrdinalIgnoreCase);
+                            <div class="col-6 col-md-3 col-lg-2">
+                                <div class="i3d-selector-tile i3d-checkbox-tile @(isChecked ? "is-selected" : "") @(isAllowed ? "" : "opacity-50 is-disabled")"
+                                     data-stack-card="@stack.Slug">
+                                    <input class="form-check-input flex-shrink-0" type="checkbox" name="TechStacks" value="@stack.Slug" id="stack_@stack.Slug" @(isChecked ? "checked" : "") @(isAllowed ? "" : "disabled") />
+                                    <partial name="_Icon3D" model='(stack.Slug, "xs", $"{stack.Label} 3D 圖示")' />
+                                    <label class="form-check-label small fw-semibold mb-0" for="stack_@stack.Slug">
+                                        @stack.Label
+                                        <span class="badge bg-secondary-subtle text-secondary ms-1 incompatibility-hint @(isAllowed ? "d-none" : "")">不適用</span>
+                                    </label>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label fw-semibold">6. 目標 SDLC 角色（至少選 1 項，依專案型態自動過濾適用角色）</label>
+                    <div class="row g-2">
+                        @foreach (var role in sdlcRoles)
+                        {
+                            var isAllowed = activeRule.AllowedSdlcRoles.Contains(role.Code, StringComparer.OrdinalIgnoreCase);
+                            var isChecked = isAllowed && Model.SdlcRoles.Contains(role.Code, StringComparer.OrdinalIgnoreCase);
+                            <div class="col-6 col-md-3">
+                                <div class="i3d-selector-tile i3d-checkbox-tile @(isChecked ? "is-selected" : "") @(isAllowed ? "" : "opacity-50 is-disabled")"
+                                     data-role-card="@role.Code">
+                                    <input class="form-check-input flex-shrink-0" type="checkbox" name="SdlcRoles" value="@role.Code" id="role_@role.Code" @(isChecked ? "checked" : "") @(isAllowed ? "" : "disabled") />
+                                    <partial name="_Icon3D" model='(role.Code, "xs", $"{role.Label} 3D 圖示")' />
+                                    <label class="form-check-label small fw-semibold mb-0" for="role_@role.Code">
+                                        @role.Label
+                                        <span class="badge bg-secondary-subtle text-secondary ms-1 incompatibility-hint @(isAllowed ? "d-none" : "")">不適用</span>
+                                    </label>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <div class="card border border-warning-subtle rounded-4 overflow-hidden">
+                        <div class="card-header bg-warning-subtle py-2 d-flex align-items-center gap-2">
+                            <partial name="_Icon3D" model='("Rule", "xs", "Guardrails 3D 防禦盾牌")' />
+                            <h3 class="h6 mb-0 fw-bold">7. 專案組建參數與防堵卡點（Guardrails — 組建 Harness 時自動嵌入）</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <label asp-for="AssemblyOptions.ProjectName" class="form-label small fw-semibold">專案名稱</label>
+                                    <input asp-for="AssemblyOptions.ProjectName" class="form-control form-control-sm" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label asp-for="AssemblyOptions.SpecFilePath" class="form-label small fw-semibold">規格書路徑（Spec-First 卡點）</label>
+                                    <input asp-for="AssemblyOptions.SpecFilePath" class="form-control form-control-sm" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label asp-for="AssemblyOptions.TargetPlatform" class="form-label small fw-semibold">目標 AI 平台</label>
+                                    <select asp-for="AssemblyOptions.TargetPlatform" class="form-select form-select-sm">
+                                        <option value="All">All（Antigravity + Claude Code）</option>
+                                        <option value="Antigravity">Antigravity（AGENTS.md + .agents/ + .ecc/）</option>
+                                        <option value="ClaudeCode">Claude Code（CLAUDE.md + .claude/）</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label asp-for="AssemblyOptions.DevServerUrl" class="form-label small fw-semibold">實機驗證網址（選填）</label>
+                                    <input asp-for="AssemblyOptions.DevServerUrl" class="form-control form-control-sm" placeholder="例如：http://localhost:5109" />
+                                </div>
+                            </div>
+
+                            <div class="mt-3">
+                                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#advancedEngineeringParams">
+                                    進階工程參數（由系統 / LLM 依需求與技術棧自動產出，點此微調）
+                                </button>
+                                <div class="collapse mt-2" id="advancedEngineeringParams">
+                                    <div class="row g-3 p-3 border rounded bg-light-subtle">
+                                        <div class="col-md-4">
+                                            <label asp-for="AssemblyOptions.TargetEnvironment" class="form-label small fw-semibold">目標環境（自動產出）</label>
+                                            <input asp-for="AssemblyOptions.TargetEnvironment" class="form-control form-control-sm" />
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label asp-for="AssemblyOptions.ScopeGuardNote" class="form-label small fw-semibold">架構邊界（Scope Guard）</label>
+                                            <input asp-for="AssemblyOptions.ScopeGuardNote" class="form-control form-control-sm" />
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label asp-for="AssemblyOptions.ProtectedPaths" class="form-label small fw-semibold">受保護敏感路徑（Claude Code 阻擋寫入）</label>
+                                            <input asp-for="AssemblyOptions.ProtectedPaths" class="form-control form-control-sm font-monospace" />
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label asp-for="AssemblyOptions.BuildCommand" class="form-label small fw-semibold">建置指令（自動產出）</label>
+                                            <input asp-for="AssemblyOptions.BuildCommand" class="form-control form-control-sm font-monospace" />
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label asp-for="AssemblyOptions.FormatCommand" class="form-label small fw-semibold">格式檢查指令（自動產出）</label>
+                                            <input asp-for="AssemblyOptions.FormatCommand" class="form-control form-control-sm font-monospace" />
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label asp-for="AssemblyOptions.TestCommand" class="form-label small fw-semibold">測試指令（自動產出）</label>
+                                            <input asp-for="AssemblyOptions.TestCommand" class="form-control form-control-sm font-monospace" />
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label asp-for="AssemblyOptions.SecurityScanCommand" class="form-label small fw-semibold">安全掃描指令（自動產出）</label>
+                                            <input asp-for="AssemblyOptions.SecurityScanCommand" class="form-control form-control-sm font-monospace" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr class="my-3" />
+                            <div class="small fw-semibold mb-2">啟用的強制防堵卡點（Hard Gates 3D 觸控開關）：</div>
+                            <div class="row g-2 small">
+                                <div class="col-md-4">
+                                    <div class="i3d-selector-tile i3d-checkbox-tile @(Model.AssemblyOptions.RequireSpecFirst ? "is-selected" : "")">
+                                        <input asp-for="AssemblyOptions.RequireSpecFirst" class="form-check-input flex-shrink-0" />
+                                        <partial name="_Icon3D" model='("Playbook", "xs", "規格先行卡點")' />
+                                        <label asp-for="AssemblyOptions.RequireSpecFirst" class="form-check-label mb-0 fw-semibold">規格先行卡點（未改 Spec 禁止改程式）</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="i3d-selector-tile i3d-checkbox-tile @(Model.AssemblyOptions.RequireTestsBeforeDone ? "is-selected" : "")">
+                                        <input asp-for="AssemblyOptions.RequireTestsBeforeDone" class="form-check-input flex-shrink-0" />
+                                        <partial name="_Icon3D" model='("Rule", "xs", "品質閘門卡點")' />
+                                        <label asp-for="AssemblyOptions.RequireTestsBeforeDone" class="form-check-label mb-0 fw-semibold">品質閘門卡點（產生 quality-gate 腳本）</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="i3d-selector-tile i3d-checkbox-tile @(Model.AssemblyOptions.RequireEvidenceOutput ? "is-selected" : "")">
+                                        <input asp-for="AssemblyOptions.RequireEvidenceOutput" class="form-check-input flex-shrink-0" />
+                                        <partial name="_Icon3D" model='("Success", "xs", "證據輸出契約")' />
+                                        <label asp-for="AssemblyOptions.RequireEvidenceOutput" class="form-check-label mb-0 fw-semibold">證據輸出契約（禁止口頭宣稱完成）</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="i3d-selector-tile i3d-checkbox-tile @(Model.AssemblyOptions.IncludeGitPreCommitHook ? "is-selected" : "")">
+                                        <input asp-for="AssemblyOptions.IncludeGitPreCommitHook" class="form-check-input flex-shrink-0" />
+                                        <partial name="_Icon3D" model='("Lock", "xs", "Git Pre-Commit 卡點")' />
+                                        <label asp-for="AssemblyOptions.IncludeGitPreCommitHook" class="form-check-label mb-0 fw-semibold">Git Pre-Commit 卡點（阻擋密鑰/格式違規）</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-8">
+                                    <div class="i3d-selector-tile i3d-checkbox-tile @(Model.AssemblyOptions.IncludeIdeAutoRules ? "is-selected" : "")">
+                                        <input asp-for="AssemblyOptions.IncludeIdeAutoRules" class="form-check-input flex-shrink-0" />
+                                        <partial name="_Icon3D" model='("Agent", "xs", "IDE 自動載入規則")' />
+                                        <label asp-for="AssemblyOptions.IncludeIdeAutoRules" class="form-check-label mb-0 fw-semibold">IDE 自動載入規則（含協調員邊界、人類確認閘門與 7 步流程）</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-text text-muted small mt-2">
+                                說明：勾選後將於 <code>AGENTS.md</code>、<code>CLAUDE.md</code> 與 <code>.agents/rules/workflow-guardrails.md</code> 自動載入「專責協調員監控、各角色唯讀邊界、SA 規格後人類確認閘門與嚴禁跳步（7 步完整流程）」治理規範；即使未勾選，<code>README_HARNESS.md</code> 仍會內建新手協作指南。
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary btn-lg d-inline-flex align-items-center gap-2 shadow-sm">
+                    <partial name="_Icon3D" model='("Bundle", "xs", "產生推薦清單")' />
+                    <span>產生推薦清單</span>
+                </button>
+                <a asp-controller="Home" asp-action="Index" class="btn btn-outline-secondary btn-lg">返回首頁</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (() => {
+            const rules = @Html.Raw(WizardCompatibility.ToClientRulesJson());
+            const projectTypeSelect = document.getElementById("ProjectType");
+            const projectLifecycleSelect = document.getElementById("ProjectLifecycle");
+            const archStyleSelect = document.getElementById("ArchStyle");
+            const analyzeBtn = document.getElementById("analyzeReqBtn");
+            const statusBox = document.getElementById("analysisStatusBox");
+            const keywordsContainer = document.getElementById("requirementKeywordsContainer");
+
+            if (!projectTypeSelect || !archStyleSelect) return;
+
+            const toSet = (items) => new Set((items || []).map(x => x.toLowerCase()));
+
+            const syncCheckboxGroup = (selector, attrName, allowedSet, fallbackValues) => {
+                let anyChecked = false;
+                const cards = document.querySelectorAll(selector);
+
+                cards.forEach(card => {
+                    const key = (card.getAttribute(attrName) || "").toLowerCase();
+                    const checkbox = card.querySelector("input[type='checkbox']");
+                    const hint = card.querySelector(".incompatibility-hint");
+                    if (!checkbox) return;
+
+                    const allowed = allowedSet.has(key);
+                    checkbox.disabled = !allowed;
+                    card.classList.toggle("opacity-50", !allowed);
+                    card.classList.toggle("is-disabled", !allowed);
+                    if (hint) hint.classList.toggle("d-none", allowed);
+
+                    if (!allowed) {
+                        checkbox.checked = false;
+                    } else if (checkbox.checked) {
+                        anyChecked = true;
+                    }
+                });
+
+                if (!anyChecked && fallbackValues && fallbackValues.length > 0) {
+                    const fallbackSet = toSet(fallbackValues);
+                    cards.forEach(card => {
+                        const key = (card.getAttribute(attrName) || "").toLowerCase();
+                        const checkbox = card.querySelector("input[type='checkbox']");
+                        if (checkbox && !checkbox.disabled && fallbackSet.has(key)) {
+                            checkbox.checked = true;
+                        }
+                    });
+                }
+            };
+
+            const applyCompatibility = () => {
+                const rule = rules[projectTypeSelect.value];
+                if (!rule) return;
+
+                const allowedArch = toSet(rule.allowedArchStyles);
+                Array.from(archStyleSelect.options).forEach(opt => {
+                    const allowed = allowedArch.has(opt.value.toLowerCase());
+                    opt.disabled = !allowed;
+                    opt.textContent = allowed ? opt.value : `${opt.value}（不適用）`;
+                });
+
+                if (!allowedArch.has(archStyleSelect.value.toLowerCase())) {
+                    archStyleSelect.value = rule.defaultArchStyle;
+                }
+
+                syncCheckboxGroup("[data-stack-card]", "data-stack-card", toSet(rule.allowedTechStacks), rule.defaultTechStacks);
+                syncCheckboxGroup("[data-role-card]", "data-role-card", toSet(rule.allowedSdlcRoles), rule.allowedSdlcRoles);
+
+                if (window.ECC3D) {
+                    window.ECC3D.syncAllSelectors();
+                }
+            };
+
+            const setCheckboxes = (selector, attrName, values) => {
+                const targetSet = toSet(values);
+                document.querySelectorAll(selector).forEach(card => {
+                    const key = (card.getAttribute(attrName) || "").toLowerCase();
+                    const cb = card.querySelector("input[type='checkbox']");
+                    if (cb && !cb.disabled) {
+                        cb.checked = targetSet.has(key);
+                    }
+                });
+                if (window.ECC3D) {
+                    window.ECC3D.syncCheckboxCards();
+                }
+            };
+
+            const applyCommandPresets = (stacks) => {
+                const stackSet = toSet(stacks);
+                const buildInput = document.getElementById("AssemblyOptions_BuildCommand");
+                const formatInput = document.getElementById("AssemblyOptions_FormatCommand");
+                const testInput = document.getElementById("AssemblyOptions_TestCommand");
+                const envInput = document.getElementById("AssemblyOptions_TargetEnvironment");
+                if (!buildInput || !formatInput || !testInput || !envInput) return;
+
+                if (stackSet.has("python")) {
+                    envInput.value = "Python 3.12 / FastAPI / pytest";
+                    buildInput.value = "python -m compileall src";
+                    formatInput.value = "ruff check .";
+                    testInput.value = "pytest";
+                } else if (stackSet.has("go")) {
+                    envInput.value = "Go 1.23";
+                    buildInput.value = "go build ./...";
+                    formatInput.value = "gofmt -l .";
+                    testInput.value = "go test ./...";
+                } else if (stackSet.has("react") || stackSet.has("vue")) {
+                    if (!stackSet.has("dotnet")) {
+                        envInput.value = "Node.js / TypeScript";
+                        buildInput.value = "npm run build";
+                        formatInput.value = "npm run lint";
+                        testInput.value = "npm test";
+                    }
+                } else if (stackSet.has("dotnet")) {
+                    envInput.value = ".NET 10 / ASP.NET Core MVC";
+                    buildInput.value = "dotnet build -warnaserror";
+                    formatInput.value = "dotnet format --verify-no-changes --no-restore";
+                    testInput.value = "dotnet test --no-build --verbosity normal";
+                }
+            };
+
+            if (analyzeBtn) {
+                analyzeBtn.addEventListener("click", async () => {
+                    const purposeInput = document.getElementById("ProjectPurpose");
+                    const docInput = document.getElementById("RequirementDocument");
+                    const tokenInput = document.querySelector("input[name='__RequestVerificationToken']");
+
+                    const formData = new FormData();
+                    if (purposeInput) formData.append("projectPurpose", purposeInput.value || "");
+                    if (docInput && docInput.files && docInput.files.length > 0) {
+                        formData.append("requirementDocument", docInput.files[0]);
+                    }
+                    if (tokenInput) {
+                        formData.append("__RequestVerificationToken", tokenInput.value);
+                    }
+
+                    analyzeBtn.disabled = true;
+                    analyzeBtn.textContent = "分析中...";
+
+                    try {
+                        const res = await fetch("@Url.Action("AnalyzeRequirements", "Wizard")", {
+                            method: "POST",
+                            body: formData
+                        });
+                        const data = await res.json();
+
+                        if (!res.ok || !data.isSuccess) {
+                            statusBox.className = "alert alert-danger mt-3 mb-0 py-2 small";
+                            statusBox.textContent = data.errorMessage || "需求分析失敗，請檢查輸入內容或檔案格式。";
+                            return;
+                        }
+
+                        if (data.suggestedProjectType) projectTypeSelect.value = data.suggestedProjectType;
+                        if (data.suggestedProjectLifecycle && projectLifecycleSelect) {
+                            projectLifecycleSelect.value = data.suggestedProjectLifecycle;
+                        }
+                        applyCompatibility();
+
+                        if (data.suggestedArchStyle) archStyleSelect.value = data.suggestedArchStyle;
+                        if (data.suggestedTechStacks && data.suggestedTechStacks.length > 0) {
+                            setCheckboxes("[data-stack-card]", "data-stack-card", data.suggestedTechStacks);
+                            applyCommandPresets(data.suggestedTechStacks);
+                        }
+                        if (data.suggestedSdlcRoles && data.suggestedSdlcRoles.length > 0) {
+                            setCheckboxes("[data-role-card]", "data-role-card", data.suggestedSdlcRoles);
+                        }
+                        if (window.ECC3D) {
+                            window.ECC3D.syncAllSelectors();
+                        }
+
+                        if (keywordsContainer) {
+                            keywordsContainer.innerHTML = "";
+                            (data.extractedKeywords || []).forEach(kw => {
+                                const hidden = document.createElement("input");
+                                hidden.type = "hidden";
+                                hidden.name = "RequirementKeywords";
+                                hidden.value = kw;
+                                keywordsContainer.appendChild(hidden);
+                            });
+                        }
+
+                        if (data.suggestedProjectName) {
+                            const projInput = document.getElementById("AssemblyOptions_ProjectName");
+                            if (projInput) projInput.value = data.suggestedProjectName;
+                        }
+                        if (data.suggestedTargetEnvironment) {
+                            const envInput = document.getElementById("AssemblyOptions_TargetEnvironment");
+                            if (envInput) envInput.value = data.suggestedTargetEnvironment;
+                        }
+                        if (data.suggestedBuildCommand) {
+                            const buildInput = document.getElementById("AssemblyOptions_BuildCommand");
+                            if (buildInput) buildInput.value = data.suggestedBuildCommand;
+                        }
+                        if (data.suggestedFormatCommand) {
+                            const fmtInput = document.getElementById("AssemblyOptions_FormatCommand");
+                            if (fmtInput) fmtInput.value = data.suggestedFormatCommand;
+                        }
+                        if (data.suggestedTestCommand) {
+                            const testInput = document.getElementById("AssemblyOptions_TestCommand");
+                            if (testInput) testInput.value = data.suggestedTestCommand;
+                        }
+                        if (data.suggestedSecurityScanCommand) {
+                            const secInput = document.getElementById("AssemblyOptions_SecurityScanCommand");
+                            if (secInput) secInput.value = data.suggestedSecurityScanCommand;
+                        }
+
+                        const sourceLabel = data.analysisSource ? `（分析模式：${data.analysisSource}）` : "";
+                        statusBox.className = "alert alert-success mt-3 mb-0 py-2 small";
+                        statusBox.textContent = `${data.summaryNote || "已完成需求分析並更新建議條件。"}${sourceLabel}`;
+                    } catch (err) {
+                        statusBox.className = "alert alert-danger mt-3 mb-0 py-2 small";
+                        statusBox.textContent = "需求分析發生連線錯誤，請稍後再試。";
+                    } finally {
+                        analyzeBtn.disabled = false;
+                        analyzeBtn.textContent = "分析需求並自動建議條件";
+                    }
+                });
+            }
+
+            projectTypeSelect.addEventListener("change", applyCompatibility);
+            applyCompatibility();
+
+            const saveGeminiBtn = document.getElementById("saveGeminiKeyBtn");
+            if (saveGeminiBtn) {
+                saveGeminiBtn.addEventListener("click", async () => {
+                    const keyInput = document.getElementById("geminiApiKeyInput");
+                    const modelInput = document.getElementById("geminiModelInput");
+                    const saveStatus = document.getElementById("geminiSaveStatus");
+                    const badge = document.getElementById("geminiConfigBadge");
+                    const tokenInput = document.querySelector("input[name='__RequestVerificationToken']");
+
+                    const formData = new FormData();
+                    formData.append("apiKey", keyInput ? keyInput.value : "");
+                    formData.append("model", modelInput ? modelInput.value : "gemini-2.5-flash");
+                    if (tokenInput) formData.append("__RequestVerificationToken", tokenInput.value);
+
+                    saveGeminiBtn.disabled = true;
+                    try {
+                        const res = await fetch("@Url.Action("SaveGeminiKey", "Wizard")", {
+                            method: "POST",
+                            body: formData
+                        });
+                        const data = await res.json();
+                        saveStatus.className = res.ok && data.success
+                            ? "alert alert-success py-1 px-2 mb-0 small mt-2"
+                            : "alert alert-danger py-1 px-2 mb-0 small mt-2";
+                        saveStatus.textContent = data.message || "儲存失敗";
+                        if (res.ok && data.success && badge) {
+                            badge.className = "badge bg-success";
+                            badge.textContent = "已啟用 Gemini API（自動深度分析與精選）";
+                        }
+                    } catch {
+                        saveStatus.className = "alert alert-danger py-1 px-2 mb-0 small mt-2";
+                        saveStatus.textContent = "儲存設定時發生連線錯誤。";
+                    } finally {
+                        saveGeminiBtn.disabled = false;
+                    }
+                });
+            }
+        })();
+    </script>
+}

@@ -1,0 +1,745 @@
+@model ECCSELECTION.Web.ViewModels.WizardResultViewModel
+@using Microsoft.AspNetCore.Html
+@{
+    ViewData["Title"] = "Harness 推薦結果";
+    var lifecycleLabel = string.Equals(Model.Request.ProjectLifecycle, "Brownfield", StringComparison.OrdinalIgnoreCase)
+        ? "舊專案導入 (Brownfield)"
+        : "新專案建置 (Greenfield)";
+}
+
+@functions {
+    private static string GetScoreGaugeClass(int score)
+        => score >= 80 ? "i3d-score-high" : score >= 60 ? "i3d-score-mid" : "i3d-score-low";
+
+    private static int GetLitCells(int score)
+        => Math.Clamp((int)Math.Ceiling(score / 20.0), 1, 5);
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <button type="submit" form="bundleDownloadForm" id="downloadBundleBtn" class="btn btn-primary btn-lg d-inline-flex align-items-center gap-2 shadow-sm">
+            <partial name="_Icon3D" model='("Bundle", "xs", "下載 Harness 套件")' />
+            <span>下載勾選的 Harness 套件 (.zip)</span>
+            <span class="badge bg-light text-primary ms-1" id="selectedCountBadge">@Model.TotalUniqueComponentCount</span>
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="selectAllBtn">全選</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="clearAllBtn">全不選</button>
+    </div>
+
+    <div class="d-flex gap-2">
+        <form asp-action="ExportMarkdown" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="ProjectType" value="@Model.Request.ProjectType" />
+            <input type="hidden" name="ProjectLifecycle" value="@Model.Request.ProjectLifecycle" />
+            <input type="hidden" name="ArchStyle" value="@Model.Request.ArchStyle" />
+            <input type="hidden" name="Mode" value="@Model.Request.Mode" />
+            @foreach (var stack in Model.Request.TechStacks)
+            {
+                <input type="hidden" name="TechStacks" value="@stack" />
+            }
+            @foreach (var role in Model.Request.SdlcRoles)
+            {
+                <input type="hidden" name="SdlcRoles" value="@role" />
+            }
+            <button type="submit" class="btn btn-outline-success">匯出推薦摘要 (.md)</button>
+        </form>
+        <a asp-action="Index" class="btn btn-outline-secondary">重新填寫問券</a>
+    </div>
+</div>
+
+<div class="i3d-hero-panel p-3 p-md-4 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <div class="d-flex align-items-center gap-3">
+            <partial name="_Icon3D" model='("Agent", "md", "Harness 推薦套組")' />
+            <h2 class="h4 mb-0 fw-bold">Harness 配套推薦結果（@Model.Suites.Count 套 Agent 組合 / @Model.TotalUniqueComponentCount 個核心檔案）</h2>
+        </div>
+        <span class="badge bg-dark">精選來源：@Model.CurationSource</span>
+    </div>
+    <div class="i3d-capsule-row mt-2">
+        <span class="i3d-micro-capsule">
+            <partial name="_Icon3D" model='(Model.Request.ProjectType, "xs", Model.Request.ProjectType)' />
+            <span>@Model.Request.ProjectType</span>
+        </span>
+        <span class="i3d-micro-capsule">
+            <partial name="_Icon3D" model='(Model.Request.ProjectLifecycle, "xs", lifecycleLabel)' />
+            <span>@lifecycleLabel</span>
+        </span>
+        <span class="i3d-micro-capsule">
+            <partial name="_Icon3D" model='(Model.Request.ArchStyle, "xs", Model.Request.ArchStyle)' />
+            <span>@Model.Request.ArchStyle</span>
+        </span>
+        <span class="i3d-micro-capsule">
+            <partial name="_Icon3D" model='(Model.Request.Mode, "xs", Model.Request.Mode)' />
+            <span>@Model.Request.Mode</span>
+        </span>
+        @foreach (var stack in Model.Request.TechStacks)
+        {
+            <span class="i3d-micro-capsule">
+                <partial name="_Icon3D" model='(stack, "xs", stack)' />
+                <span>@stack</span>
+            </span>
+        }
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Model.Request.ProjectPurpose) || !string.IsNullOrWhiteSpace(Model.Request.UploadedDocumentName) || Model.Request.RequirementKeywords.Count > 0)
+    {
+        <div class="mt-2 pt-2 border-top small">
+            @if (!string.IsNullOrWhiteSpace(Model.Request.UploadedDocumentName))
+            {
+                <span class="badge bg-primary-subtle text-primary me-2">需求文件：@Model.Request.UploadedDocumentName</span>
+            }
+            @foreach (var kw in Model.Request.RequirementKeywords)
+            {
+                <span class="badge bg-success-subtle text-success me-1">#@kw</span>
+            }
+            @if (!string.IsNullOrWhiteSpace(Model.Request.ProjectPurpose))
+            {
+                <div class="text-muted mt-1">用途說明：@Model.Request.ProjectPurpose</div>
+            }
+        </div>
+    }
+</div>
+
+@if (TempData["GeminiCurationSuccess"] is string okMsg)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @okMsg
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="關閉"></button>
+    </div>
+}
+@if (TempData["GeminiCurationError"] is string errMsg)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        @errMsg
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="關閉"></button>
+    </div>
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-lg-7">
+        <div class="card shadow-sm border-0 rounded-4 h-100">
+            <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+                <span class="fw-bold small d-inline-flex align-items-center gap-2">
+                    <partial name="_Icon3D" model='("Playbook", "xs", "Harness Playbook")' />
+                    <span>Harness 治理流程圖解（隨套件打包為 <code>HARNESS_PLAYBOOK.md</code>）</span>
+                </span>
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#playbookPreview">
+                    檢視原始 Markdown
+                </button>
+            </div>
+            <div class="card-body py-3">
+                <div class="i3d-playbook-flow mb-2" aria-label="7 步 AI 協作治理流程">
+                    <span class="i3d-flow-node"><partial name="_Icon3D" model='("SA", "xs", "SA 規格")' /> 1. SA 規格</span>
+                    <span class="i3d-flow-arrow">&rarr;</span>
+                    <span class="i3d-flow-node"><partial name="_Icon3D" model='("Lock", "xs", "人類確認閘門")' /> 2. 人類確認</span>
+                    <span class="i3d-flow-arrow">&rarr;</span>
+                    <span class="i3d-flow-node"><partial name="_Icon3D" model='("PG_BE", "xs", "分層實作")' /> 3. 分層實作</span>
+                    <span class="i3d-flow-arrow">&rarr;</span>
+                    <span class="i3d-flow-node"><partial name="_Icon3D" model='("PG_TEST", "xs", "TDD 測試")' /> 4. TDD 測試</span>
+                    <span class="i3d-flow-arrow">&rarr;</span>
+                    <span class="i3d-flow-node"><partial name="_Icon3D" model='("Rule", "xs", "審查與品質閘門")' /> 5. 品質閘門</span>
+                    <span class="i3d-flow-arrow">&rarr;</span>
+                    <span class="i3d-flow-node"><partial name="_Icon3D" model='("Web", "xs", "實機驗證")' /> 6. 實機驗證</span>
+                    <span class="i3d-flow-arrow">&rarr;</span>
+                    <span class="i3d-flow-node"><partial name="_Icon3D" model='("Success", "xs", "文件同步")' /> 7. 文件同步</span>
+                </div>
+                <div class="collapse mt-2" id="playbookPreview">
+                    <pre class="mb-0 small bg-light p-2 rounded border" style="white-space: pre-wrap; max-height: 220px; overflow-y: auto;">@Model.HarnessPlaybookMarkdown</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card shadow-sm border-primary-subtle rounded-4 h-100">
+            <div class="card-header bg-primary-subtle py-2 d-flex justify-content-between align-items-center">
+                <span class="fw-bold small text-primary-emphasis d-inline-flex align-items-center gap-2">
+                    <partial name="_Icon3D" model='("Llm", "xs", "Gemini 接力")' />
+                    <span>Chrome 網頁版 Gemini 接力精選（免 API Key）</span>
+                </span>
+                <button class="btn btn-sm btn-primary" type="button" id="copyAndOpenGeminiBtn">
+                    複製 Prompt 並開啟 Gemini
+                </button>
+            </div>
+            <div class="card-body py-2 small">
+                <p class="text-muted mb-2">
+                    點上方按鈕自動複製候選清單 Prompt 並開啟 Gemini 分頁，貼上執行後將 JSON 貼回下方即可套用：
+                </p>
+                <textarea id="chromeGeminiPromptSource" class="d-none">@Model.ChromeGeminiPrompt</textarea>
+                <div id="copyGeminiStatus" class="text-success fw-semibold mb-1 d-none">已複製 Prompt！請於新開啟的 Gemini 分頁貼上執行。</div>
+                <form asp-action="ApplyGeminiCuration" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="ProjectType" value="@Model.Request.ProjectType" />
+                    <input type="hidden" name="ProjectLifecycle" value="@Model.Request.ProjectLifecycle" />
+                    <input type="hidden" name="ArchStyle" value="@Model.Request.ArchStyle" />
+                    <input type="hidden" name="Mode" value="@Model.Request.Mode" />
+                    <input type="hidden" name="ProjectPurpose" value="@Model.Request.ProjectPurpose" />
+                    <input type="hidden" name="UploadedDocumentName" value="@Model.Request.UploadedDocumentName" />
+                    <input type="hidden" name="AssemblyOptions.ProjectName" value="@Model.Request.AssemblyOptions.ProjectName" />
+                    <input type="hidden" name="AssemblyOptions.SpecFilePath" value="@Model.Request.AssemblyOptions.SpecFilePath" />
+                    <input type="hidden" name="AssemblyOptions.TargetEnvironment" value="@Model.Request.AssemblyOptions.TargetEnvironment" />
+                    <input type="hidden" name="AssemblyOptions.BuildCommand" value="@Model.Request.AssemblyOptions.BuildCommand" />
+                    <input type="hidden" name="AssemblyOptions.FormatCommand" value="@Model.Request.AssemblyOptions.FormatCommand" />
+                    <input type="hidden" name="AssemblyOptions.TestCommand" value="@Model.Request.AssemblyOptions.TestCommand" />
+                    <input type="hidden" name="AssemblyOptions.SecurityScanCommand" value="@Model.Request.AssemblyOptions.SecurityScanCommand" />
+                    @foreach (var stack in Model.Request.TechStacks)
+                    {
+                        <input type="hidden" name="TechStacks" value="@stack" />
+                    }
+                    @foreach (var role in Model.Request.SdlcRoles)
+                    {
+                        <input type="hidden" name="SdlcRoles" value="@role" />
+                    }
+                    @foreach (var kw in Model.Request.RequirementKeywords)
+                    {
+                        <input type="hidden" name="RequirementKeywords" value="@kw" />
+                    }
+                    <textarea name="geminiResponseJson" class="form-control form-control-sm font-monospace mb-2" rows="3" placeholder='貼上 Gemini 回傳的 {"selectedIds": [...], "reasons": {...}, "playbookMarkdown": "..."}'></textarea>
+                    <button type="submit" class="btn btn-sm btn-outline-primary w-100">套用 Chrome Gemini 精選結果</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (Model.TotalRecommendedCount == 0 && Model.Suites.Count == 0)
+{
+    <div class="alert alert-warning">
+        目前條件下查無符合的推薦元件。請確認已完成 <a asp-controller="Sync" asp-action="Index">GitHub 同步</a>，或切換為 <strong>Comprehensive</strong> 模式後再試。
+    </div>
+}
+else
+{
+    <form asp-action="DownloadBundle" method="post" id="bundleDownloadForm">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="AssemblyOptions.HarnessPlaybookMarkdown" value="@Model.HarnessPlaybookMarkdown" />
+
+        <div class="card shadow-sm border-warning-subtle rounded-4 mb-3">
+            <div class="card-header bg-warning-subtle py-2 d-flex justify-content-between align-items-center">
+                <span class="fw-bold small d-inline-flex align-items-center gap-2">
+                    <partial name="_Icon3D" model='("Rule", "xs", "防堵卡點設定")' />
+                    <span>組建參數與防堵卡點設定（隨 Harness 套件一起打包）</span>
+                </span>
+                <button class="btn btn-sm btn-outline-dark" type="button" data-bs-toggle="collapse" data-bs-target="#assemblyOptionsPanel">
+                    展開 / 收合參數
+                </button>
+            </div>
+            <div class="collapse show" id="assemblyOptionsPanel">
+                <div class="card-body py-3">
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold mb-1">專案名稱</label>
+                            <input class="form-control form-control-sm" name="AssemblyOptions.ProjectName" value="@Model.Request.AssemblyOptions.ProjectName" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold mb-1">規格書路徑</label>
+                            <input class="form-control form-control-sm" name="AssemblyOptions.SpecFilePath" value="@Model.Request.AssemblyOptions.SpecFilePath" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold mb-1">目標 AI 平台</label>
+                            <select class="form-select form-select-sm" name="AssemblyOptions.TargetPlatform">
+                                <option value="All" selected="@(Model.Request.AssemblyOptions.TargetPlatform == "All")">All（Antigravity + Claude Code）</option>
+                                <option value="Antigravity" selected="@(Model.Request.AssemblyOptions.TargetPlatform == "Antigravity")">Antigravity</option>
+                                <option value="ClaudeCode" selected="@(Model.Request.AssemblyOptions.TargetPlatform == "ClaudeCode")">Claude Code</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold mb-1">實機驗證網址（選填）</label>
+                            <input class="form-control form-control-sm" name="AssemblyOptions.DevServerUrl" value="@Model.Request.AssemblyOptions.DevServerUrl" />
+                        </div>
+                    </div>
+
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#resultAdvancedCmds">
+                            檢視 / 微調自動產出之工程指令與邊界（@Model.Request.AssemblyOptions.TargetEnvironment）
+                        </button>
+                        <div class="collapse mt-2" id="resultAdvancedCmds">
+                            <div class="row g-2 p-2 border rounded bg-light-subtle">
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-semibold mb-1">目標環境</label>
+                                    <input class="form-control form-control-sm" name="AssemblyOptions.TargetEnvironment" value="@Model.Request.AssemblyOptions.TargetEnvironment" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-semibold mb-1">架構邊界（Scope Guard）</label>
+                                    <input class="form-control form-control-sm" name="AssemblyOptions.ScopeGuardNote" value="@Model.Request.AssemblyOptions.ScopeGuardNote" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-semibold mb-1">受保護敏感路徑（Claude Code Deny）</label>
+                                    <input class="form-control form-control-sm font-monospace" name="AssemblyOptions.ProtectedPaths" value="@Model.Request.AssemblyOptions.ProtectedPaths" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-semibold mb-1">建置指令</label>
+                                    <input class="form-control form-control-sm font-monospace" name="AssemblyOptions.BuildCommand" value="@Model.Request.AssemblyOptions.BuildCommand" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-semibold mb-1">格式指令</label>
+                                    <input class="form-control form-control-sm font-monospace" name="AssemblyOptions.FormatCommand" value="@Model.Request.AssemblyOptions.FormatCommand" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-semibold mb-1">測試指令</label>
+                                    <input class="form-control form-control-sm font-monospace" name="AssemblyOptions.TestCommand" value="@Model.Request.AssemblyOptions.TestCommand" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-semibold mb-1">安全掃描指令</label>
+                                    <input class="form-control form-control-sm font-monospace" name="AssemblyOptions.SecurityScanCommand" value="@Model.Request.AssemblyOptions.SecurityScanCommand" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mt-2">
+                        <div class="col-12 d-flex flex-wrap align-items-end gap-3 small pt-1">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="AssemblyOptions.RequireSpecFirst" value="true" id="res_RequireSpecFirst" checked="@Model.Request.AssemblyOptions.RequireSpecFirst" />
+                                <input type="hidden" name="AssemblyOptions.RequireSpecFirst" value="false" />
+                                <label class="form-check-label" for="res_RequireSpecFirst">規格先行卡點</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="AssemblyOptions.RequireTestsBeforeDone" value="true" id="res_RequireTestsBeforeDone" checked="@Model.Request.AssemblyOptions.RequireTestsBeforeDone" />
+                                <input type="hidden" name="AssemblyOptions.RequireTestsBeforeDone" value="false" />
+                                <label class="form-check-label" for="res_RequireTestsBeforeDone">品質閘門腳本</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="AssemblyOptions.RequireEvidenceOutput" value="true" id="res_RequireEvidenceOutput" checked="@Model.Request.AssemblyOptions.RequireEvidenceOutput" />
+                                <input type="hidden" name="AssemblyOptions.RequireEvidenceOutput" value="false" />
+                                <label class="form-check-label" for="res_RequireEvidenceOutput">證據輸出契約</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="AssemblyOptions.IncludeGitPreCommitHook" value="true" id="res_IncludeGitPreCommitHook" checked="@Model.Request.AssemblyOptions.IncludeGitPreCommitHook" />
+                                <input type="hidden" name="AssemblyOptions.IncludeGitPreCommitHook" value="false" />
+                                <label class="form-check-label" for="res_IncludeGitPreCommitHook">Git Pre-Commit 卡點</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="AssemblyOptions.IncludeIdeAutoRules" value="true" id="res_IncludeIdeAutoRules" checked="@Model.Request.AssemblyOptions.IncludeIdeAutoRules" />
+                                <input type="hidden" name="AssemblyOptions.IncludeIdeAutoRules" value="false" />
+                                <label class="form-check-label" for="res_IncludeIdeAutoRules">IDE 自動載入規則 &amp; Hooks（含協調員邊界、人類確認閘門與 7 步流程）</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <ul class="nav nav-tabs mb-3" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active d-inline-flex align-items-center gap-2" id="suites-tab" data-bs-toggle="tab" data-bs-target="#suites-pane" type="button" role="tab">
+                    <partial name="_Icon3D" model='("Agent", "xs", "Agent 套組")' />
+                    <span>Agent 配套積木組（推薦預設）</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link d-inline-flex align-items-center gap-2" id="roles-tab" data-bs-toggle="tab" data-bs-target="#roles-pane" type="button" role="tab">
+                    <partial name="_Icon3D" model='("SA", "xs", "SDLC 角色")' />
+                    <span>依 SDLC 角色檢視</span>
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="suites-pane" role="tabpanel">
+                @if (Model.Suites.Count == 0)
+                {
+                    <div class="alert alert-info">目前條件下尚無符合門檻的 Lead Agent，請切換至「依 SDLC 角色檢視」或改用 Comprehensive 模式。</div>
+                }
+                else
+                {
+                    @foreach (var suite in Model.Suites)
+                    {
+                        var pairedItems = suite.PairedSkills
+                            .Concat(suite.PairedRules)
+                            .Concat(suite.PairedCommands)
+                            .ToList();
+                        var leadDrawerId = $"lead-drawer-{suite.SuiteId}";
+                        var leadLit = GetLitCells(suite.LeadAgent.Score);
+
+                        <section class="i3d-lead-card mb-4" data-suite-card="@suite.SuiteId">
+                            <div class="i3d-lead-header d-flex flex-wrap justify-content-between align-items-start gap-3">
+                                <div class="d-flex align-items-start gap-3">
+                                    <input class="form-check-input mt-2 suite-master-checkbox" type="checkbox" data-suite-id="@suite.SuiteId" checked title="全選 / 取消此 Agent 套組" aria-label="全選或取消 @suite.LeadAgent.Name 套組" />
+                                    <div class="i3d-float">
+                                        <partial name="_Icon3D" model='("Agent", "lg", $"Lead Agent：{suite.LeadAgent.Name}")' />
+                                    </div>
+                                    <div>
+                                        <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                            <span class="badge bg-info text-dark">Lead Agent 主機核心</span>
+                                            <h3 class="h5 mb-0 fw-bold text-white">@suite.LeadAgent.Name</h3>
+                                            <div class="i3d-score-gauge @GetScoreGaugeClass(suite.LeadAgent.Score) text-dark" title="適配度分數：@suite.LeadAgent.Score">
+                                                <div class="i3d-gauge-cells" aria-hidden="true">
+                                                    @for (var i = 1; i <= 5; i++)
+                                                    {
+                                                        <span class="i3d-gauge-cell @(i <= leadLit ? "is-lit" : "")"></span>
+                                                    }
+                                                </div>
+                                                <span class="i3d-score-num">@suite.LeadAgent.Score</span>
+                                            </div>
+                                        </div>
+                                        <div class="i3d-capsule-row mt-1">
+                                            @foreach (var roleName in suite.CoveredRoles)
+                                            {
+                                                <span class="i3d-micro-capsule bg-white text-dark">
+                                                    <partial name="_Icon3D" model='(roleName, "xs", roleName)' />
+                                                    <span>@roleName</span>
+                                                </span>
+                                            }
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-light py-0 px-2"
+                                                    data-i3d-toggle="@leadDrawerId"
+                                                    data-label-closed="展開 Agent 詳情"
+                                                    data-label-open="收合 Agent 詳情"
+                                                    aria-expanded="false"
+                                                    aria-controls="@leadDrawerId">
+                                                <span data-i3d-toggle-label>展開 Agent 詳情</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex align-items-center gap-2">
+                                    <label class="form-check-label small rounded px-2 py-1 bg-white text-dark fw-semibold d-inline-flex align-items-center gap-1">
+                                        <input class="form-check-input me-1 component-checkbox" type="checkbox"
+                                               name="selectedComponentIds"
+                                               value="@suite.LeadAgent.ComponentId"
+                                               data-component-id="@suite.LeadAgent.ComponentId"
+                                               data-suite-item="@suite.SuiteId"
+                                               checked />
+                                        <span>包含此 Agent</span>
+                                    </label>
+                                    <a href="@suite.LeadAgent.RawUrl" target="_blank" rel="noopener" class="btn btn-sm btn-outline-light">Raw</a>
+                                </div>
+                            </div>
+
+                            <div id="@leadDrawerId" class="p-3 bg-white border-bottom d-none small" data-i3d-drawer>
+                                <div class="mb-1"><strong>使用方式：</strong>@suite.LeadAgent.UsageGuide</div>
+                                <div class="mb-1"><strong>建議路徑：</strong><code>@suite.LeadAgent.LocalSuggestedPath</code></div>
+                                <div class="text-success"><strong>推薦理由：</strong>@string.Join(" ｜ ", suite.LeadAgent.MatchReasons)</div>
+                            </div>
+
+                            <div class="p-3">
+                                @if (pairedItems.Count == 0)
+                                {
+                                    <div class="text-muted small">此 Agent 目前無額外配對的 Skill / Rule / Command。</div>
+                                }
+                                else
+                                {
+                                    <div class="i3d-tile-grid">
+                                        @foreach (var item in pairedItems)
+                                        {
+                                            var typeLower = item.ComponentType.ToString().ToLowerInvariant();
+                                            var drawerId = $"suite-{suite.SuiteId}-item-{item.ComponentId}";
+                                            var lit = GetLitCells(item.Score);
+
+                                            <article class="i3d-component-card i3d-type-@typeLower is-checked i3d-hover-tilt">
+                                                <div class="d-flex justify-content-between align-items-start gap-2">
+                                                    <div class="d-flex align-items-center gap-2 min-w-0">
+                                                        <input class="form-check-input component-checkbox flex-shrink-0" type="checkbox"
+                                                               name="selectedComponentIds"
+                                                               value="@item.ComponentId"
+                                                               data-component-id="@item.ComponentId"
+                                                               data-suite-item="@suite.SuiteId"
+                                                               checked />
+                                                        <partial name="_Icon3D" model='(item.ComponentType.ToString(), "sm", $"{item.ComponentType}：{item.Name}")' />
+                                                        <div class="min-w-0">
+                                                            <div class="fw-bold text-dark text-truncate" title="@item.Name">@item.Name</div>
+                                                            <span class="badge bg-light text-dark border small">@item.ComponentType</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="i3d-score-gauge @GetScoreGaugeClass(item.Score)" title="Pair Score: @item.Score">
+                                                        <div class="i3d-gauge-cells" aria-hidden="true">
+                                                            @for (var i = 1; i <= 5; i++)
+                                                            {
+                                                                <span class="i3d-gauge-cell @(i <= lit ? "is-lit" : "")"></span>
+                                                            }
+                                                        </div>
+                                                        <span class="i3d-score-num">@item.Score</span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="i3d-summary-clamp" title="@item.UsageGuide">
+                                                    @item.UsageGuide
+                                                </div>
+
+                                                <div class="i3d-capsule-row">
+                                                    @foreach (var reason in item.MatchReasons.Take(2))
+                                                    {
+                                                        <span class="i3d-micro-capsule" title="@reason">@reason</span>
+                                                    }
+                                                    @if (item.MatchReasons.Count > 2)
+                                                    {
+                                                        <span class="i3d-micro-capsule text-muted">+@(item.MatchReasons.Count - 2)</span>
+                                                    }
+                                                </div>
+
+                                                <div id="@drawerId" class="i3d-detail-drawer d-none" data-i3d-drawer>
+                                                    <div class="mb-1"><strong>使用與觸發：</strong>@item.UsageGuide</div>
+                                                    <div class="mb-1"><strong>建議路徑：</strong><code>@item.LocalSuggestedPath</code></div>
+                                                    <div><strong>完整配套理由：</strong>@string.Join("；", item.MatchReasons)</div>
+                                                </div>
+
+                                                <div class="mt-auto pt-2 border-top d-flex justify-content-between align-items-center">
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-secondary"
+                                                            data-i3d-toggle="@drawerId"
+                                                            data-label-closed="展開詳情"
+                                                            data-label-open="收合詳情"
+                                                            aria-expanded="false"
+                                                            aria-controls="@drawerId">
+                                                        <span data-i3d-toggle-label>展開詳情</span>
+                                                    </button>
+                                                    <a href="@item.RawUrl" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">Raw</a>
+                                                </div>
+                                            </article>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </section>
+                    }
+                }
+
+                @if (Model.AdditionalCandidates.Count > 0)
+                {
+                    <div class="card shadow-sm border-0 rounded-4 mb-4">
+                        <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">
+                            <span class="fw-bold small">其他候選元件（預設未勾選，共 @Model.AdditionalCandidates.Count 項，可手動加勾）</span>
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#additionalCandidatesPanel">
+                                展開 / 收合候選積木
+                            </button>
+                        </div>
+                        <div class="collapse" id="additionalCandidatesPanel">
+                            <div class="card-body">
+                                <div class="i3d-tile-grid">
+                                    @foreach (var cand in Model.AdditionalCandidates)
+                                    {
+                                        var typeLower = cand.ComponentType.ToString().ToLowerInvariant();
+                                        var candDrawerId = $"cand-drawer-{cand.ComponentId}";
+                                        var lit = GetLitCells(cand.Score);
+
+                                        <article class="i3d-component-card i3d-type-@typeLower i3d-hover-tilt">
+                                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                                <div class="d-flex align-items-center gap-2 min-w-0">
+                                                    <input class="form-check-input component-checkbox flex-shrink-0" type="checkbox"
+                                                           name="selectedComponentIds"
+                                                           value="@cand.ComponentId"
+                                                           data-component-id="@cand.ComponentId" />
+                                                    <partial name="_Icon3D" model='(cand.ComponentType.ToString(), "sm", $"{cand.ComponentType}：{cand.Name}")' />
+                                                    <div class="min-w-0">
+                                                        <div class="fw-bold text-dark text-truncate" title="@cand.Name">@cand.Name</div>
+                                                        <span class="badge bg-light text-dark border small">@cand.ComponentType</span>
+                                                    </div>
+                                                </div>
+                                                <div class="i3d-score-gauge @GetScoreGaugeClass(cand.Score)" title="Score: @cand.Score">
+                                                    <div class="i3d-gauge-cells" aria-hidden="true">
+                                                        @for (var i = 1; i <= 5; i++)
+                                                        {
+                                                            <span class="i3d-gauge-cell @(i <= lit ? "is-lit" : "")"></span>
+                                                        }
+                                                    </div>
+                                                    <span class="i3d-score-num">@cand.Score</span>
+                                                </div>
+                                            </div>
+                                            <div class="i3d-summary-clamp" title="@cand.UsageGuide">@cand.UsageGuide</div>
+                                            <div id="@candDrawerId" class="i3d-detail-drawer d-none" data-i3d-drawer>
+                                                <div class="mb-1"><strong>說明：</strong>@cand.UsageGuide</div>
+                                                <div><strong>建議路徑：</strong><code>@cand.LocalSuggestedPath</code></div>
+                                            </div>
+                                            <div class="mt-auto pt-2 border-top d-flex justify-content-between align-items-center">
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-secondary"
+                                                        data-i3d-toggle="@candDrawerId"
+                                                        data-label-closed="展開詳情"
+                                                        data-label-open="收合詳情"
+                                                        aria-expanded="false"
+                                                        aria-controls="@candDrawerId">
+                                                    <span data-i3d-toggle-label>展開詳情</span>
+                                                </button>
+                                                <a href="@cand.RawUrl" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">Raw</a>
+                                            </div>
+                                        </article>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="tab-pane fade" id="roles-pane" role="tabpanel">
+                @foreach (var group in Model.Groups)
+                {
+                    <div class="card shadow-sm border-0 rounded-4 mb-4">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center gap-2">
+                                <partial name="_Icon3D" model='(group.Role, "sm", group.RoleDisplayName)' />
+                                <h3 class="h5 mb-0 fw-bold">@group.RoleDisplayName</h3>
+                            </div>
+                            <span class="badge bg-primary">@group.Items.Count 項推薦</span>
+                        </div>
+                        <div class="card-body">
+                            @if (group.Items.Count == 0)
+                            {
+                                <div class="text-muted small">此角色目前無符合分數門檻之元件。</div>
+                            }
+                            else
+                            {
+                                <div class="i3d-tile-grid">
+                                    @foreach (var item in group.Items)
+                                    {
+                                        var typeLower = item.ComponentType.ToString().ToLowerInvariant();
+                                        var roleDrawerId = $"role-{group.Role}-item-{item.ComponentId}";
+                                        var lit = GetLitCells(item.Score);
+
+                                        <article class="i3d-component-card i3d-type-@typeLower is-checked i3d-hover-tilt">
+                                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                                <div class="d-flex align-items-center gap-2 min-w-0">
+                                                    <input class="form-check-input component-checkbox flex-shrink-0" type="checkbox"
+                                                           name="selectedComponentIds"
+                                                           value="@item.ComponentId"
+                                                           data-component-id="@item.ComponentId"
+                                                           checked />
+                                                    <partial name="_Icon3D" model='(item.ComponentType.ToString(), "sm", $"{item.ComponentType}：{item.Name}")' />
+                                                    <div class="min-w-0">
+                                                        <div class="fw-bold text-dark text-truncate" title="@item.Name">@item.Name</div>
+                                                        <span class="badge bg-light text-dark border small">@item.ComponentType</span>
+                                                    </div>
+                                                </div>
+                                                <div class="i3d-score-gauge @GetScoreGaugeClass(item.Score)" title="Score: @item.Score">
+                                                    <div class="i3d-gauge-cells" aria-hidden="true">
+                                                        @for (var i = 1; i <= 5; i++)
+                                                        {
+                                                            <span class="i3d-gauge-cell @(i <= lit ? "is-lit" : "")"></span>
+                                                        }
+                                                    </div>
+                                                    <span class="i3d-score-num">@item.Score</span>
+                                                </div>
+                                            </div>
+
+                                            <div class="i3d-summary-clamp" title="@item.UsageGuide">@item.UsageGuide</div>
+
+                                            <div class="i3d-capsule-row">
+                                                @foreach (var reason in item.MatchReasons.Take(2))
+                                                {
+                                                    <span class="i3d-micro-capsule" title="@reason">@reason</span>
+                                                }
+                                            </div>
+
+                                            <div id="@roleDrawerId" class="i3d-detail-drawer d-none" data-i3d-drawer>
+                                                <div class="mb-1"><strong>使用與觸發：</strong>@item.UsageGuide</div>
+                                                <div class="mb-1"><strong>建議路徑：</strong><code>@item.LocalSuggestedPath</code></div>
+                                                <div><strong>推薦理由：</strong>@string.Join("；", item.MatchReasons)</div>
+                                            </div>
+
+                                            <div class="mt-auto pt-2 border-top d-flex justify-content-between align-items-center">
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-secondary"
+                                                        data-i3d-toggle="@roleDrawerId"
+                                                        data-label-closed="展開詳情"
+                                                        data-label-open="收合詳情"
+                                                        aria-expanded="false"
+                                                        aria-controls="@roleDrawerId">
+                                                    <span data-i3d-toggle-label>展開詳情</span>
+                                                </button>
+                                                <a href="@item.RawUrl" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">Raw 下載</a>
+                                            </div>
+                                        </article>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </form>
+}
+
+@section Scripts {
+    <script>
+        (() => {
+            const checkboxes = Array.from(document.querySelectorAll(".component-checkbox"));
+            const masterCheckboxes = Array.from(document.querySelectorAll(".suite-master-checkbox"));
+            const countBadge = document.getElementById("selectedCountBadge");
+            const downloadBtn = document.getElementById("downloadBundleBtn");
+            const selectAllBtn = document.getElementById("selectAllBtn");
+            const clearAllBtn = document.getElementById("clearAllBtn");
+
+            if (checkboxes.length === 0) return;
+
+            const updateState = () => {
+                const selectedIds = new Set();
+                checkboxes.forEach(cb => {
+                    if (cb.checked) {
+                        selectedIds.add(cb.getAttribute("data-component-id"));
+                    }
+                });
+
+                if (countBadge) countBadge.textContent = selectedIds.size.toString();
+                if (downloadBtn) downloadBtn.disabled = selectedIds.size === 0;
+
+                masterCheckboxes.forEach(master => {
+                    const suiteId = master.getAttribute("data-suite-id");
+                    const suiteItems = checkboxes.filter(cb => cb.getAttribute("data-suite-item") === suiteId);
+                    const checkedCount = suiteItems.filter(cb => cb.checked).length;
+                    master.checked = suiteItems.length > 0 && checkedCount === suiteItems.length;
+                    master.indeterminate = checkedCount > 0 && checkedCount < suiteItems.length;
+                });
+
+                if (window.ECC3D) {
+                    window.ECC3D.syncResultComponentCards();
+                }
+            };
+
+            checkboxes.forEach(cb => {
+                cb.addEventListener("change", () => {
+                    const compId = cb.getAttribute("data-component-id");
+                    checkboxes
+                        .filter(other => other.getAttribute("data-component-id") === compId)
+                        .forEach(other => { other.checked = cb.checked; });
+                    updateState();
+                });
+            });
+
+            masterCheckboxes.forEach(master => {
+                master.addEventListener("change", () => {
+                    const suiteId = master.getAttribute("data-suite-id");
+                    const suiteItems = checkboxes.filter(cb => cb.getAttribute("data-suite-item") === suiteId);
+                    suiteItems.forEach(cb => {
+                        const compId = cb.getAttribute("data-component-id");
+                        checkboxes
+                            .filter(other => other.getAttribute("data-component-id") === compId)
+                            .forEach(other => { other.checked = master.checked; });
+                    });
+                    updateState();
+                });
+            });
+
+            if (selectAllBtn) {
+                selectAllBtn.addEventListener("click", () => {
+                    checkboxes.forEach(cb => { cb.checked = true; });
+                    updateState();
+                });
+            }
+
+            if (clearAllBtn) {
+                clearAllBtn.addEventListener("click", () => {
+                    checkboxes.forEach(cb => { cb.checked = false; });
+                    updateState();
+                });
+            }
+
+            updateState();
+
+            const copyGeminiBtn = document.getElementById("copyAndOpenGeminiBtn");
+            const promptSource = document.getElementById("chromeGeminiPromptSource");
+            const copyStatus = document.getElementById("copyGeminiStatus");
+            if (copyGeminiBtn && promptSource) {
+                copyGeminiBtn.addEventListener("click", async () => {
+                    try {
+                        await navigator.clipboard.writeText(promptSource.value);
+                        if (copyStatus) copyStatus.classList.remove("d-none");
+                    } catch {
+                        // Clipboard API may be blocked in non-HTTPS contexts; still open Gemini tab
+                    }
+                    window.open("https://gemini.google.com/app", "_blank", "noopener");
+                });
+            }
+        })();
+    </script>
+}

@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ECCSELECTION.Web/ECCSELECTION.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ECCSELECTION.Tests/ECCSELECTION.Tests.csproj" />
+  </Folder>
+</Solution>

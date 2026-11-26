@@ -1,0 +1,152 @@
+@model ECCSELECTION.Web.ViewModels.SyncDashboardViewModel
+@using ECCSELECTION.Web.Models.Enums
+@{
+    ViewData["Title"] = "GitHub 同步紀錄";
+    var maxTotal = Math.Max(1, Model.RecentLogs.Select(x => x.TotalFound).DefaultIfEmpty(1).Max());
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div class="d-flex align-items-center gap-3">
+        <partial name="_Icon3D" model='("Running", "md", "GitHub 同步時間軸")' />
+        <div>
+            <h2 class="h4 mb-0 fw-bold">GitHub 同步管理與 3D 時間軸</h2>
+            <p class="text-muted small mb-0">上游儲存庫：<code>@Model.GitHubRepoFullName</code> ｜ 目前啟用元件：<strong>@Model.ActiveComponents</strong> 筆</p>
+        </div>
+    </div>
+    <form asp-action="Trigger" method="post">
+        @Html.AntiForgeryToken()
+        <button type="submit" class="btn btn-success d-inline-flex align-items-center gap-2 shadow-sm">
+            <partial name="_Icon3D" model='("Success", "xs", "立即同步")' />
+            <span>立即從 GitHub 同步</span>
+        </button>
+    </form>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="i3d-pod i3d-hover-tilt">
+            <div class="i3d-pod-pulse @(Model.HasGitHubToken ? "is-online" : "")">
+                <partial name="_Icon3D" model='("Token", "md", "GitHub Token 鑰匙")' />
+            </div>
+            <div>
+                <div class="small text-muted">GitHub Personal Access Token</div>
+                <div class="fw-bold mt-1 @(Model.HasGitHubToken ? "text-success" : "text-secondary")">
+                    @(Model.HasGitHubToken ? "已設定（支援高頻率 API 存取 5000 req/hr）" : "未設定（使用匿名 API，每小時限制 60 次）")
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="i3d-pod i3d-hover-tilt">
+            <div class="i3d-pod-pulse @(Model.LlmEnabled ? "is-online" : "")">
+                <partial name="_Icon3D" model='("Llm", "md", "LLM 繁體中文摘要增強")' />
+            </div>
+            <div>
+                <div class="small text-muted">LLM 繁體中文摘要增強</div>
+                <div class="fw-bold mt-1 @(Model.LlmEnabled ? "text-success" : "text-secondary")">
+                    @(Model.LlmEnabled ? "已啟用 Gemini 智慧摘要" : "未啟用（使用確定性規則式繁中摘要）")
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="h6 fw-bold text-uppercase text-muted mb-0">最近 20 筆同步紀錄（3D Sync Timeline）</h3>
+    <span class="small text-muted">共 @Model.RecentLogs.Count 筆紀錄</span>
+</div>
+
+@if (Model.RecentLogs.Count == 0)
+{
+    <div class="i3d-pod justify-content-center py-5 text-muted">
+        <partial name="_Icon3D" model='("Inactive", "md", "尚無同步紀錄")' />
+        <span>尚無任何同步紀錄，請點擊上方「立即從 GitHub 同步」。</span>
+    </div>
+}
+else
+{
+    <div class="i3d-timeline">
+        @foreach (var log in Model.RecentLogs)
+        {
+            var statusKind = log.Status.ToString();
+            var badgeClass = log.Status switch
+            {
+                SyncStatus.Success => "bg-success",
+                SyncStatus.PartialSuccess => "bg-warning text-dark",
+                SyncStatus.Running => "bg-info text-dark",
+                _ => "bg-danger"
+            };
+            var totalH = Math.Clamp((int)Math.Round(log.TotalFound * 28.0 / maxTotal), 8, 30);
+            var addH = log.AddedCount > 0 ? Math.Clamp((int)Math.Round(log.AddedCount * 28.0 / maxTotal) + 8, 10, 30) : 6;
+            var updH = log.UpdatedCount > 0 ? Math.Clamp((int)Math.Round(log.UpdatedCount * 28.0 / maxTotal) + 8, 10, 30) : 6;
+            var remH = log.RemovedCount > 0 ? Math.Clamp((int)Math.Round(log.RemovedCount * 28.0 / maxTotal) + 8, 10, 30) : 6;
+            var errDrawerId = $"sync-err-{log.Id}";
+
+            <article class="i3d-timeline-item">
+                <div class="i3d-timeline-node" title="同步狀態：@log.Status">
+                    <partial name="_Icon3D" model='(statusKind, "xs", $"狀態 {log.Status}")' />
+                </div>
+
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <div>
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="fw-bold text-dark">#@log.Id</span>
+                            <span class="badge @badgeClass">@log.Status</span>
+                            <span class="small text-muted">開始 (UTC)：@log.StartedAt.ToString("yyyy-MM-dd HH:mm:ss")</span>
+                        </div>
+                        <div class="small text-muted">
+                            完成時間 (UTC)：@(log.CompletedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "進行中 / 未完成")
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap align-items-center gap-3">
+                        <div class="i3d-mini-pillars" aria-label="掃描 @log.TotalFound、新增 @log.AddedCount、更新 @log.UpdatedCount、下架 @log.RemovedCount">
+                            <div class="i3d-mini-pillar-box" title="掃描總數：@log.TotalFound">
+                                <div class="i3d-mini-bar bg-secondary" style="height: @(totalH)px;"></div>
+                                <span class="fw-bold small">@log.TotalFound</span>
+                                <span class="text-muted" style="font-size: 0.65rem;">掃描</span>
+                            </div>
+                            <div class="i3d-mini-pillar-box" title="新增：@log.AddedCount">
+                                <div class="i3d-mini-bar bg-success" style="height: @(addH)px;"></div>
+                                <span class="fw-bold small text-success">+@log.AddedCount</span>
+                                <span class="text-muted" style="font-size: 0.65rem;">新增</span>
+                            </div>
+                            <div class="i3d-mini-pillar-box" title="更新：@log.UpdatedCount">
+                                <div class="i3d-mini-bar bg-primary" style="height: @(updH)px;"></div>
+                                <span class="fw-bold small text-primary">~@log.UpdatedCount</span>
+                                <span class="text-muted" style="font-size: 0.65rem;">更新</span>
+                            </div>
+                            <div class="i3d-mini-pillar-box" title="下架：@log.RemovedCount">
+                                <div class="i3d-mini-bar bg-danger" style="height: @(remH)px;"></div>
+                                <span class="fw-bold small text-danger">-@log.RemovedCount</span>
+                                <span class="text-muted" style="font-size: 0.65rem;">下架</span>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(log.ErrorMessage))
+                        {
+                            <button type="button"
+                                    class="i3d-error-capsule"
+                                    data-i3d-toggle="@errDrawerId"
+                                    data-label-closed="檢視警示訊息"
+                                    data-label-open="收合警示訊息"
+                                    aria-expanded="false"
+                                    aria-controls="@errDrawerId">
+                                <partial name="_Icon3D" model='("Failed", "xs", "錯誤警示")' />
+                                <span data-i3d-toggle-label>檢視警示訊息</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(log.ErrorMessage))
+                {
+                    <div id="@errDrawerId" class="i3d-detail-drawer mt-3 d-none border-danger-subtle bg-danger-subtle text-danger-emphasis" data-i3d-drawer>
+                        <strong>同步警示 / 錯誤詳情：</strong>
+                        <div class="mt-1 font-monospace small">@log.ErrorMessage</div>
+                    </div>
+                }
+            </article>
+        }
+    </div>
+}

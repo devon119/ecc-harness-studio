@@ -1,0 +1,160 @@
+@model ECCSELECTION.Web.ViewModels.EccCatalogFilterViewModel
+@using ECCSELECTION.Web.Models.Enums
+@{
+    ViewData["Title"] = "ECC 知識庫瀏覽";
+    var roles = new[] { "SA", "SD", "PG_FE", "PG_BE", "PG_DB", "PG_TEST", "QA" };
+    var stacks = new[] { "common", "dotnet", "kotlin", "react", "vue", "typescript", "python", "go", "java", "sqlserver", "sqlite", "postgres", "mysql" };
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div class="d-flex align-items-center gap-3">
+        <partial name="_Icon3D" model='("Catalog", "md", "ECC 3D 元件知識庫")' />
+        <div>
+            <h2 class="h4 mb-0 fw-bold">ECC 元件知識庫（3D 圖譜視圖）</h2>
+            <p class="text-muted small mb-0">目前啟用中元件：<strong>@Model.ActiveCount</strong> 筆（總計 @Model.TotalCount 筆）</p>
+        </div>
+    </div>
+</div>
+
+<form method="get" asp-action="Index" class="card card-body shadow-sm border-0 mb-4 rounded-4">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label small fw-semibold">關鍵字搜尋</label>
+            <input type="text" name="Keyword" value="@Model.Keyword" class="form-control" placeholder="名稱、路徑或摘要..." />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold">元件類型</label>
+            <select name="ComponentType" class="form-select">
+                <option value="">全部類型</option>
+                @foreach (ComponentType t in Enum.GetValues(typeof(ComponentType)))
+                {
+                    <option value="@t" selected="@(Model.ComponentType == t)">@t</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold">SDLC 角色</label>
+            <select name="SdlcRole" class="form-select">
+                <option value="">全部角色</option>
+                @foreach (var r in roles)
+                {
+                    <option value="@r" selected="@(string.Equals(Model.SdlcRole, r, StringComparison.OrdinalIgnoreCase))">@r</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold">技術棧</label>
+            <select name="TechStack" class="form-select">
+                <option value="">全部技術棧</option>
+                @foreach (var s in stacks)
+                {
+                    <option value="@s" selected="@(string.Equals(Model.TechStack, s, StringComparison.OrdinalIgnoreCase))">@s</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3 d-flex gap-2 align-items-center">
+            <div class="form-check me-2">
+                <input class="form-check-input" type="checkbox" name="IncludeInactive" value="true" id="IncludeInactive" @(Model.IncludeInactive ? "checked" : "") />
+                <label class="form-check-label small" for="IncludeInactive">含已下架</label>
+            </div>
+            <button type="submit" class="btn btn-primary">篩選</button>
+            <a asp-action="Index" class="btn btn-outline-secondary">重設</a>
+        </div>
+    </div>
+</form>
+
+@if (Model.Items.Count == 0)
+{
+    <div class="i3d-pod justify-content-center py-5 text-muted">
+        <partial name="_Icon3D" model='("Inactive", "md", "查無符合條件元件")' />
+        <span>查無符合條件的 ECC 元件，請調整篩選條件或執行 GitHub 同步。</span>
+    </div>
+}
+else
+{
+    <div class="i3d-tile-grid">
+        @foreach (var item in Model.Items)
+        {
+            var typeLower = item.ComponentType.ToString().ToLowerInvariant();
+            var roleList = (item.SdlcRoles ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var techList = (item.TechStacks ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var drawerId = $"catalog-drawer-{item.Id}";
+
+            <article class="i3d-component-card i3d-type-@typeLower @(item.IsActive ? "" : "i3d-card-inactive") i3d-hover-tilt">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <div class="d-flex align-items-center gap-2 min-w-0">
+                        <partial name="_Icon3D" model='(item.ComponentType.ToString(), "md", $"{item.ComponentType}：{item.Name}")' />
+                        <div class="min-w-0">
+                            <div class="fw-bold text-dark text-truncate" title="@item.Name">@item.Name</div>
+                            <span class="badge bg-light text-dark border small">@item.ComponentType</span>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                        @if (item.IsManuallyEdited)
+                        {
+                            <span class="i3d-micro-capsule bg-warning-subtle border-warning-subtle" title="已人工鎖定，同步時不覆寫">
+                                <partial name="_Icon3D" model='("Lock", "xs", "人工鎖定保護")' />
+                                <span class="visually-hidden">人工鎖定</span>
+                            </span>
+                        }
+                        @if (!item.IsActive)
+                        {
+                            <span class="i3d-micro-capsule bg-danger-subtle border-danger-subtle text-danger" title="上游已下架封存">
+                                <partial name="_Icon3D" model='("Inactive", "xs", "已下架封存")' />
+                                <span>已下架</span>
+                            </span>
+                        }
+                    </div>
+                </div>
+
+                <div class="i3d-summary-clamp" title="@item.SummaryZh">
+                    @item.SummaryZh
+                </div>
+
+                <div class="i3d-capsule-row">
+                    @foreach (var r in roleList.Take(3))
+                    {
+                        <span class="i3d-micro-capsule" title="SDLC 角色：@r">
+                            <partial name="_Icon3D" model='(r, "xs", $"角色 {r}")' />
+                            <span>@r</span>
+                        </span>
+                    }
+                    @foreach (var t in techList.Take(3))
+                    {
+                        <span class="i3d-micro-capsule" title="技術棧：@t">
+                            <partial name="_Icon3D" model='(t, "xs", $"技術棧 {t}")' />
+                            <span>@t</span>
+                        </span>
+                    }
+                    @if (roleList.Length + techList.Length > 6)
+                    {
+                        <span class="i3d-micro-capsule text-muted">+@(roleList.Length + techList.Length - 6)</span>
+                    }
+                </div>
+
+                <div id="@drawerId" class="i3d-detail-drawer d-none" data-i3d-drawer>
+                    <div class="mb-1"><strong>完整摘要：</strong>@item.SummaryZh</div>
+                    <div class="mb-1"><strong>檔案路徑：</strong><code>@item.Path</code></div>
+                    <div class="mb-1"><strong>所有角色：</strong>@(string.IsNullOrWhiteSpace(item.SdlcRoles) ? "-" : item.SdlcRoles)</div>
+                    <div><strong>所有技術棧：</strong>@(string.IsNullOrWhiteSpace(item.TechStacks) ? "-" : item.TechStacks)</div>
+                </div>
+
+                <div class="mt-auto pt-2 border-top d-flex justify-content-between align-items-center gap-2">
+                    <button type="button"
+                            class="btn btn-sm btn-outline-secondary"
+                            data-i3d-toggle="@drawerId"
+                            data-label-closed="展開詳情"
+                            data-label-open="收合詳情"
+                            aria-expanded="false"
+                            aria-controls="@drawerId">
+                        <span data-i3d-toggle-label>展開詳情</span>
+                    </button>
+                    <div class="d-flex gap-1">
+                        <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">編輯</a>
+                        <a href="@item.RawUrl" target="_blank" rel="noopener" class="btn btn-sm btn-outline-dark">Raw</a>
+                    </div>
+                </div>
+            </article>
+        }
+    </div>
+}
