@@ -45,3 +45,8 @@
 - 流程指令：`.ecc/commands/`（`plan`, `code-review`, `security-scan`, `quality-gate`, `test-coverage`, `build-fix`）
 - 角色檢查清單：`.ecc/agents/`（`csharp-reviewer.md`, `database-reviewer.md`, `tdd-guide.md`, `e2e-runner.md`, `security-reviewer.md`）
 - 長期記憶：`AI_MEMORY.md`
+
+## 4. 雙版本網站架構（不可忘記）
+本專案（`devon119/ecc-harness-studio`）同時維護兩個版本的網站：
+- **本機完整版（`main` 分支）**：ASP.NET Core MVC（`.NET 10`）+ SQLite，執行於 `http://localhost:5109`，含完整 3D Dashboard、`/Catalog`（瀏覽與編輯）、`/Sync`（GitHub 同步）與 `/Wizard`。
+- **線上簡易版（`gh-pages` 分支）**：純靜態版（`index.html`、`app.js`、`css/icon3d.css`、`data/catalog.json`），發佈於 `https://devon119.github.io/ecc-harness-studio/`，含 3D Dashboard、唯讀 3D 知識庫瀏覽、3D 問券精靈與前端 `.zip` 打包，並提供完整版一鍵安裝包（`downloads/eccselection-full.zip`、`install-eccselection.ps1/.sh`）。發佈時嚴禁混淆或覆蓋兩個分支的定位。

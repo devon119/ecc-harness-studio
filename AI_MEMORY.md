@@ -56,7 +56,19 @@
 ## 5. v1.5 多代理協作治理與建議包內建規範（2026-11-26）
 - **專責協調員 ＋ 7 種角色唯讀寫入邊界**：
   - 主 Agent 僅擔任專責協調員（拆解、派發、監控、驗收，不越權直接修改業務程式碼、測試或規格）。
-  - 各專責子代理寫入邊界嚴格隔離：SA（僅 `SPEC_ECCSELECTION.md` 或增量規格檔）、後端（僅 `Services/`、`Models/`、`Data/`、`Program.cs`）、前端（僅 `Controllers/`、`Views/`、`wwwroot/`）、測試（僅 `tests/ECCSELECTION.Tests/`）、審查與驗證（全專案唯讀）、文件同步（僅 `DEVELOPMENT_STATUS.md`）。
+  - 各專責子代理寫入邊界嚴格隔離：SA（僅於 `docs/specs/` 建立獨立規格檔，嚴禁累加修改 `SPEC_ECCSELECTION.md`）、後端（僅 `Services/`、`Models/`、`Data/`、`Program.cs`）、前端（僅 `Controllers/`、`Views/`、`wwwroot/`）、測試（僅 `tests/ECCSELECTION.Tests/`）、審查與驗證（全專案唯讀）、文件同步（僅 `DEVELOPMENT_STATUS.md`）。
 - **SA 後人類確認閘門與嚴禁跳步**：SA / 規格產出後**必須暫停呈報摘要並取得人類明確確認**才可進入實作；每項需求須完整走完 7 步流程，禁止 AI 自行略過任何步驟。
 - **建議包內建協作治理原則（`HarnessBundleService` v1.5）**：不新增額外開關，直接於匯出之 `AGENTS.md`、`CLAUDE.md`、`.agents/rules/workflow-guardrails.md` 與 `README_HARNESS.md`（永遠產出）寫入上述協調員邊界、人類確認閘門、7 步流程與新手操作指引。
-- **規格維護成本最佳化建議**：`SPEC_ECCSELECTION.md` 作為總覽與核心契約索引；後續 `v1.6+` 獨立新功能可改採增量規格檔（如 `docs/specs/v1.6-xxx.md`）並在總覽補上索引連結，以節省 SA 讀寫 token 成本。
+
+---
+
+## 6. v1.6 雙版本網站架構與發佈記憶（2026-11-26，永久記憶）
+本專案（`https://github.com/devon119/ecc-harness-studio`）永遠維護**兩個版本的網站**，切換或發佈時嚴禁混淆或互相覆蓋：
+1. **本機完整版（`main` 分支）**：
+   - 技術棧：ASP.NET Core MVC（`.NET 10`）+ EF Core + SQLite，執行於 `http://localhost:5109`。
+   - 功能：v1.6 全站 3D 圖示視覺化（零 `<table>`），包含 3D Dashboard（`/`）、ECC 知識庫瀏覽與人工編輯儲存（`/Catalog`、`/Catalog/Edit`）、GitHub 增量同步引擎與 3D 時間軸（`/Sync`）、推薦問券精靈（`/Wizard`、`/Wizard/Recommend`）與後端完整打包（`.zip`）。
+2. **線上簡易版（`gh-pages` 分支，GitHub Pages）**：
+   - 線上網址：`https://devon119.github.io/ecc-harness-studio/`（GitHub Pages 來源固定為 `gh-pages` 分支根目錄 `/`）。
+   - 技術棧：純靜態前端（`index.html`、`app.js`、`css/icon3d.css`、`data/catalog.json`、`JSZip`），共用完整版 `icon3d.css`。
+   - 功能：v1.6 3D Dashboard（`#dashboard`）、唯讀版 3D ECC 知識庫瀏覽與搜尋（`#catalog`）、3D 推薦問券與前端 `.zip` 打包（`#wizard`），並內附本機完整版一鍵安裝入口（`install-eccselection.ps1`、`install-eccselection.sh`、`downloads/eccselection-full.zip`）。
+   - **發佈鐵律**：更新完整版時只推 `main`（並視需要透過 `git archive` 重新打包 `downloads/eccselection-full.zip` 更新至 `gh-pages`）；更新線上簡易版時只推 `gh-pages`，**絕對不可讓 `main` 原始碼覆蓋 GitHub Pages 的靜態入口**。
