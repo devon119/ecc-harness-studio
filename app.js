@@ -393,6 +393,7 @@
 
         $("suitesContainer").innerHTML = res.suites.map(s => {
             const paired = [...s.pairedSkills, ...s.pairedRules, ...s.pairedCommands];
+            const roleBadges = (s.coveredRoles || []).map(r => `<span class="badge bg-primary-subtle text-primary ms-1">${escapeHtml(r)}</span>`).join("");
             return `
             <div class="card shadow-sm border-0 mb-3">
                 <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
@@ -400,6 +401,7 @@
                         <span class="badge bg-dark me-1">Lead Agent</span>
                         <strong>${escapeHtml(s.leadAgent.comp.Name)}</strong>
                         <span class="badge bg-info text-dark ms-1">Score: ${s.leadAgent.score}</span>
+                        <span class="ms-2 small text-muted">適用角色：</span>${roleBadges}
                         <div class="small text-success mt-1">${escapeHtml(s.leadAgent.reasons.join(" ｜ "))}</div>
                     </div>
                     <label class="small border rounded px-2 py-1 bg-light">
@@ -438,7 +440,7 @@
                                         <td style="width:48px" class="text-center"><input type="checkbox" class="form-check-input comp-chk" value="${c.comp.Id}" /></td>
                                         <td style="width:90px"><span class="badge bg-secondary">${normType(c.comp.ComponentType)}</span></td>
                                         <td class="small fw-semibold">${escapeHtml(c.comp.Name)}</td>
-                                        <td class="small text-muted">${escapeHtml(c.comp.UsageGuide || c.comp.SummaryZh || "")}</td>
+                                        <td class="small text-muted">${escapeHtml(c.comp.UsageGuide || c.comp.SummaryZh || "")} <span class="badge bg-primary-subtle text-primary">${escapeHtml(ROLE_LABELS[c.role] || c.role || "")}</span></td>
                                     </tr>`).join("")}
                             </tbody>
                         </table>
@@ -469,18 +471,47 @@
         $("downloadProgressText").textContent = `正在從 GitHub 下載 ${selectedComps.length} 個元件檔案...`;
 
         const errors = [];
-        await Promise.all(selectedComps.map(async (c) => {
+        let skillAuxPaths = [];
+        if (selectedComps.some(c => normType(c.ComponentType) === "Skill")) {
+            try {
+                const treeRes = await fetch("https://api.github.com/repos/affaan-m/ECC/git/trees/main?recursive=1");
+                if (treeRes.ok) {
+                    const treeJson = await treeRes.json();
+                    skillAuxPaths = (treeJson.tree || [])
+                        .filter(x => x.type === "blob" && x.path && x.path.startsWith("skills/") && !x.path.endsWith("/SKILL.md"))
+                        .map(x => x.path);
+                }
+            } catch { /* non-blocking fallback to SKILL.md only */ }
+        }
+
+        const downloadTargets = [];
+        selectedComps.forEach(c => {
             const t = normType(c.ComponentType);
             const path = t === "Agent" ? `${rootDir}/agents/${c.Name}.md`
                 : t === "Skill" ? `${rootDir}/skills/${c.Name}/SKILL.md`
                 : t === "Command" ? `${rootDir}/commands/${c.Name}.md`
                 : `${rootDir}/${c.Path}`;
+            downloadTargets.push({ name: c.Name, zipPath: path, rawUrl: c.RawUrl });
+
+            if (t === "Skill" && skillAuxPaths.length > 0 && c.Path) {
+                const folderPrefix = c.Path.slice(0, c.Path.lastIndexOf("/") + 1);
+                skillAuxPaths
+                    .filter(p => p.startsWith(folderPrefix))
+                    .forEach(aux => downloadTargets.push({
+                        name: `${c.Name} (aux)`,
+                        zipPath: `${rootDir}/${aux}`,
+                        rawUrl: `https://raw.githubusercontent.com/affaan-m/ECC/main/${aux}`
+                    }));
+            }
+        });
+
+        await Promise.all(downloadTargets.map(async (item) => {
             try {
-                const resp = await fetch(c.RawUrl);
+                const resp = await fetch(item.rawUrl);
                 if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                zip.file(path, await resp.text());
+                zip.file(item.zipPath, await resp.text());
             } catch (e) {
-                errors.push(`${c.Name} (${c.RawUrl}): ${e.message}`);
+                errors.push(`${item.name} (${item.rawUrl}): ${e.message}`);
             }
         }));
 
