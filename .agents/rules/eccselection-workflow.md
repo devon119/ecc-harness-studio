@@ -12,3 +12,4 @@ trigger: always_on
 5. **嚴禁靜默吞錯**：禁止空 `catch`，外部 HTTP 失敗須記錄並寫入 `SyncLogs.ErrorMessage`。
 6. **強制品質閘門與證據回報**：修改完成後，**必須執行** `powershell -ExecutionPolicy Bypass -File scripts/quality-gate.ps1`（涵蓋 `dotnet build -warnaserror`、`dotnet format --verify-no-changes`、`dotnet test` 含覆蓋率、`npx ecc-agentshield scan`），並在回覆中逐項附上 4 項實測結果；若有前端 `Views/` / `Controllers/` / JS 異動，須於 `http://localhost:5109` 實機驗證後再更新 `DEVELOPMENT_STATUS.md`。未跑完腳本前禁止宣告完成。
 7. **雙版本網站架構記憶**：`devon119/ecc-harness-studio` 分為 **`main` 分支（`.NET 10` MVC 本機完整版，`http://localhost:5109`）** 與 **`gh-pages` 分支（純靜態 3D 線上簡易版 ＋ 一鍵安裝包，`https://devon119.github.io/ecc-harness-studio/`）**，發佈與更新時嚴禁混淆或覆蓋。
+8. **優先使用 `eccselection` MCP 工具**：已掛載專案專屬 MCP Server（`eccselection`），執行固定流程時應優先呼叫 `create_spec_file`、`check_ui_contracts`、`run_quality_gate`、`export_catalog_json`、`sync_and_publish_lite`（取代手動拼裝指令）。

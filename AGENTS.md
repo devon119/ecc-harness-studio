@@ -50,3 +50,11 @@
 本專案（`devon119/ecc-harness-studio`）同時維護兩個版本的網站：
 - **本機完整版（`main` 分支）**：ASP.NET Core MVC（`.NET 10`）+ SQLite，執行於 `http://localhost:5109`，含完整 3D Dashboard、`/Catalog`（瀏覽與編輯）、`/Sync`（GitHub 同步）與 `/Wizard`。
 - **線上簡易版（`gh-pages` 分支）**：純靜態版（`index.html`、`app.js`、`css/icon3d.css`、`data/catalog.json`），發佈於 `https://devon119.github.io/ecc-harness-studio/`，含 3D Dashboard、唯讀 3D 知識庫瀏覽、3D 問券精靈與前端 `.zip` 打包，並提供完整版一鍵安裝包（`downloads/eccselection-full.zip`、`install-eccselection.ps1/.sh`）。發佈時嚴禁混淆或覆蓋兩個分支的定位。
+
+## 5. 專案專屬 MCP Server（`eccselection`，已掛載）
+本機已註冊並掛載 `eccselection` Stdio MCP Server（`tools/ECCSELECTION.Mcp/`，設定於 `~/.gemini/config/mcp_config.json`）。執行對應固定流程時，應優先呼叫以下 MCP 工具取代手動拼裝指令：
+- `create_spec_file`：建立 `docs/specs/SPEC_<YYYYMMDD>_<TOPIC>.md` 獨立規格骨架。
+- `check_ui_contracts`：靜態掃描 `<table>` 殘留、空 `catch`、Antiforgery 與 `innerHTML`。
+- `run_quality_gate`：安全執行 `scripts/quality-gate.ps1` 並回傳 4 階段結構化結果。
+- `export_catalog_json`：唯讀匯出 SQLite 啟用元件為 `catalog.json` 格式。
+- `sync_and_publish_lite`：安全同步並發佈線上簡易版至 `gh-pages`（預設 `dryRun=true`）。

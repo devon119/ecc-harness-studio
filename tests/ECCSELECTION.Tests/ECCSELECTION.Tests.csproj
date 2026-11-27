@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ECCSELECTION.Web\ECCSELECTION.Web.csproj" />
+    <ProjectReference Include="..\..\tools\ECCSELECTION.Mcp\ECCSELECTION.Mcp.csproj" />
   </ItemGroup>
 
 </Project>

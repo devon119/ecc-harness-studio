@@ -5,4 +5,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/ECCSELECTION.Tests/ECCSELECTION.Tests.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/ECCSELECTION.Mcp/ECCSELECTION.Mcp.csproj" />
+  </Folder>
 </Solution>

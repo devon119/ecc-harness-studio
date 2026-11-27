@@ -72,3 +72,16 @@
    - 技術棧：純靜態前端（`index.html`、`app.js`、`css/icon3d.css`、`data/catalog.json`、`JSZip`），共用完整版 `icon3d.css`。
    - 功能：v1.6 3D Dashboard（`#dashboard`）、唯讀版 3D ECC 知識庫瀏覽與搜尋（`#catalog`）、3D 推薦問券與前端 `.zip` 打包（`#wizard`），並內附本機完整版一鍵安裝入口（`install-eccselection.ps1`、`install-eccselection.sh`、`downloads/eccselection-full.zip`）。
    - **發佈鐵律**：更新完整版時只推 `main`（並視需要透過 `git archive` 重新打包 `downloads/eccselection-full.zip` 更新至 `gh-pages`）；更新線上簡易版時只推 `gh-pages`，**絕對不可讓 `main` 原始碼覆蓋 GitHub Pages 的靜態入口**。
+
+---
+
+## 7. `ECCSELECTION.Mcp` 工作流程自動化工具箱（2026-11-26，已掛載）
+- **專案與規格**：`tools/ECCSELECTION.Mcp/`（`.NET 10` Stdio MCP Server，納入 `ECCSELECTION.slnx` 與 `tests/ECCSELECTION.Tests/Mcp/`），完整規格見 `docs/specs/SPEC_20261126_ECCSELECTION_MCP.md`。
+- **掛載設定**：已註冊於 `~/.gemini/config/mcp_config.json`（`eccselection` 指向 `tools/ECCSELECTION.Mcp/bin/Release/net10.0/ECCSELECTION.Mcp.exe`，`ECCSELECTION_ROOT=D:\T01_GIT\ECCSELECTION`），並於 Antigravity 中成功載入。
+- **5 個已掛載 MCP Tools（應優先透過 `call_mcp_tool` 使用）**：
+  1. `run_quality_gate`：自動停用鎖檔的 `ECCSELECTION.Web` 進程並執行 `scripts/quality-gate.ps1`，回傳 4 階段結構化結果。
+  2. `sync_and_publish_lite`：預設 `dryRun=true`，使用 `git archive main` + 隔離 `git worktree` + `HEAD == gh-pages` 雙重鎖定推送 `gh-pages:gh-pages`，徹底防止誤蓋 `main`。
+  3. `export_catalog_json`：以 `Mode=ReadOnly` 查詢本機 SQLite `EccComponents (IsActive = 1)` 匯出 `catalog.json`（預設 `writeFile=false`）。
+  4. `create_spec_file`：依 `docs/specs/SPEC_<YYYYMMDD>_<TOPIC>.md` 建立獨立規格書骨架，硬編碼拒絕修改 `SPEC_ECCSELECTION.md`。
+  5. `check_ui_contracts`：唯讀靜態掃描 `UI001`（`<table>`）、`CS001`（空 `catch`）、`SEC001`（Antiforgery）與 `UI002`（`innerHTML`）。
+- **安全契約**：`LogToStandardErrorThreshold = LogLevel.Trace` 隔離 `stderr`/`stdout`、`WorkspaceGuard` 路徑遍歷防護、`ProcessRunner` 禁用 shell 拼接（`ArgumentList`）。若修改 `tools/ECCSELECTION.Mcp/` 原始碼，須重新建置 Release 版並重載 MCP Server。
