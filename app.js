@@ -361,11 +361,15 @@
         };
     }
 
+    const GREENFIELD_KW = ["architect", "plan", "planner", "tdd", "gan-planner", "gan-generator", "database-reviewer", "api-design", "scaffold", "greenfield", "spec"];
+    const BROWNFIELD_KW = ["explore", "code-explorer", "spec-miner", "refactor", "cleaner", "silent-failure", "harness-optimizer", "review", "security", "audit", "e2e", "coverage", "legacy", "migration", "brownfield"];
+
     function recommendDeterministic(state) {
         const isCompact = state.mode !== "Comprehensive";
         const minScore = isCompact ? 50 : 40;
         const selectedStacks = new Set(state.stacks.map(s => s.toLowerCase()));
         const selectedArch = state.archStyle.toLowerCase();
+        const isGameLuau = state.projectType === "Game" && selectedStacks.has("luau");
 
         const evaluate = (comp, role) => {
             const cRoles = splitTokens(comp.SdlcRoles);
@@ -387,6 +391,32 @@
             const cArch = splitTokens(comp.ArchStyles);
             if (cArch.includes(selectedArch)) { score += 15; reasons.push(`符合架構：${state.archStyle} (+15)`); }
             else if (cArch.includes("general")) { score += 5; }
+
+            const text = `${comp.Name} ${comp.Path} ${comp.DescriptionEn}`.toLowerCase();
+            if (state.lifecycle === "Brownfield") {
+                if (BROWNFIELD_KW.some(k => text.includes(k))) {
+                    score += 20;
+                    reasons.push("適用舊專案導入與重構（Brownfield） (+20)");
+                }
+            } else if (GREENFIELD_KW.some(k => text.includes(k))) {
+                score += 20;
+                reasons.push("適用新專案從零建置（Greenfield） (+20)");
+            }
+
+            if (state.projectType === "Game") {
+                const isRobloxLuau = cStacks.includes("luau") || cArch.includes("ecs") || text.includes("roblox") || text.includes("luau");
+                if (isGameLuau && isRobloxLuau) {
+                    score += 20;
+                    reasons.push("符合 Game / Roblox Luau 開發特性 (+20)");
+                } else if (cStacks.includes("godot") || cStacks.includes("cpp") || text.includes("godot") || text.includes("gdscript") || text.includes("game") || isRobloxLuau) {
+                    score += 15;
+                    reasons.push("符合 Game 遊戲開發型態特性 (+15)");
+                } else if (comp.Name.toLowerCase().startsWith("gan-")) {
+                    const ganBonus = isGameLuau ? 5 : 15;
+                    score += ganBonus;
+                    reasons.push(`符合 Game 生成式輔助 (+${ganBonus})`);
+                }
+            }
 
             const searchable = `${comp.Name} ${comp.DescriptionEn} ${comp.SummaryZh} ${comp.UsageGuide}`.toLowerCase();
             const kwHit = state.keywords.filter(k => searchable.includes(k));
@@ -440,6 +470,12 @@
                 if (overlap.length > 0) { ps += Math.min(overlap.length * 15, 35); pr.push(`共同涵蓋角色 (${overlap.join(", ")})`); }
                 if (matched.length > 0) { ps += Math.min(matched.length * 20, 40); pr.push(`符合技術棧 (${matched.join(", ")})`); }
                 else if (hasCommon) { ps += 15; pr.push("通用規範"); }
+                const cArch = splitTokens(cand.ArchStyles);
+                if (cArch.includes(selectedArch)) { ps += 15; pr.push(`符合架構 (${state.archStyle})`); }
+                if (isGameLuau && (matched.includes("luau") || cArch.includes("ecs") || cand.Name.toLowerCase().includes("roblox") || cand.Name.toLowerCase().includes("luau"))) {
+                    ps += 15;
+                    pr.push("Roblox / Luau 套件加權");
+                }
                 if (aTokens.some(t => cand.Name.toLowerCase().includes(t) || cand.Path.toLowerCase().includes(t))) {
                     ps += 35; pr.push(`與 ${agentEv.comp.Name} 領域互補`);
                 }
@@ -709,9 +745,12 @@
                 : t === "Skill" ? `${rootDir}/skills/${c.Name}/SKILL.md`
                 : t === "Command" ? `${rootDir}/commands/${c.Name}.md`
                 : `${rootDir}/${c.Path}`;
-            downloadTargets.push({ name: c.Name, zipPath: path, rawUrl: c.RawUrl });
+            const rawUrl = c.Path && c.Path.startsWith("builtin/")
+                ? `./builtin-ecc/${c.Path.slice("builtin/".length)}`
+                : c.RawUrl;
+            downloadTargets.push({ name: c.Name, zipPath: path, rawUrl });
 
-            if (t === "Skill" && skillAuxPaths.length > 0 && c.Path) {
+            if (t === "Skill" && skillAuxPaths.length > 0 && c.Path && !c.Path.startsWith("builtin/")) {
                 const folderPrefix = c.Path.slice(0, c.Path.lastIndexOf("/") + 1);
                 skillAuxPaths
                     .filter(p => p.startsWith(folderPrefix))

@@ -200,7 +200,6 @@ body.i3d-body {
     gap: 0.5rem;
     padding: 0.28rem 0.55rem;
     background: #f8fafc;
-    color: #0f172a;
     border: 1px solid #e2e8f0;
     border-radius: 0.65rem;
     box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
@@ -239,7 +238,6 @@ body.i3d-body {
 .i3d-score-num {
     font-size: 0.75rem;
     font-weight: 700;
-    color: #0f172a;
     font-variant-numeric: tabular-nums;
     min-width: 1.6rem;
     text-align: right;
