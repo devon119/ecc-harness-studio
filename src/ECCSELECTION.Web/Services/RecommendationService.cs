@@ -153,8 +153,8 @@ public class RecommendationService : IRecommendationService
             .Where(i => !suiteIds.Contains(i.ComponentId))
             .GroupBy(i => i.ComponentId)
             .Select(g => g.OrderByDescending(x => x.Score).First())
-            .OrderByDescending(i => i.Score)
-            .ThenBy(i => i.ComponentType)
+            .OrderBy(i => GetTypePriority(i.ComponentType))
+            .ThenByDescending(i => i.Score)
             .ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
             .Take(25)
             .ToList();
@@ -219,6 +219,7 @@ public class RecommendationService : IRecommendationService
             selectedProjectType,
             targetRole,
             component,
+            selectedStacks,
             componentStacks,
             componentArches,
             out var projectReason);
@@ -327,6 +328,50 @@ public class RecommendationService : IRecommendationService
         bool isCompact,
         int minScore)
     {
+        var maxSuites = isCompact ? 3 : 6;
+        var topAgents = SelectTopAgents(
+            activeList,
+            selectedRoles,
+            selectedStacks,
+            selectedArch,
+            selectedProjectType,
+            selectedLifecycle,
+            requirementKeywords,
+            minScore,
+            maxSuites);
+
+        var nonAgents = activeList.Where(c => c.ComponentType != ComponentType.Agent).ToList();
+        var suites = new List<HarnessSuiteViewModel>();
+
+        foreach (var (agent, leadItem, coveredRoles) in topAgents)
+        {
+            var pairedCandidates = EvaluateSuitePairings(
+                agent,
+                leadItem,
+                nonAgents,
+                selectedStacks,
+                selectedArch,
+                selectedProjectType,
+                selectedLifecycle,
+                isCompact);
+
+            suites.Add(BuildSuiteViewModel(agent.Id, leadItem, coveredRoles, pairedCandidates, isCompact));
+        }
+
+        return suites;
+    }
+
+    private static List<(EccComponent Agent, RecommendedComponentItem Item, HashSet<string> Roles)> SelectTopAgents(
+        List<EccComponent> activeList,
+        List<string> selectedRoles,
+        HashSet<string> selectedStacks,
+        string selectedArch,
+        string selectedProjectType,
+        string selectedLifecycle,
+        IReadOnlyList<string> requirementKeywords,
+        int minScore,
+        int maxSuites)
+    {
         var agents = activeList.Where(c => c.ComponentType == ComponentType.Agent).ToList();
         var bestByAgentId = new Dictionary<int, (EccComponent Agent, RecommendedComponentItem Item, HashSet<string> Roles)>();
 
@@ -364,133 +409,164 @@ public class RecommendationService : IRecommendationService
             }
         }
 
-        var maxSuites = isCompact ? 3 : 6;
-        var maxSkills = isCompact ? 2 : 3;
-        var maxRules = isCompact ? 2 : 3;
-        var maxCommands = isCompact ? 1 : 2;
-        var minSkillOrCommandScore = isCompact ? 40 : 30;
-        var minRuleScore = 30;
-
-        var topAgents = bestByAgentId.Values
+        return bestByAgentId.Values
             .OrderByDescending(x => x.Item.Score)
             .ThenBy(x => x.Item.Name, StringComparer.OrdinalIgnoreCase)
             .Take(maxSuites)
             .ToList();
+    }
 
-        var nonAgents = activeList.Where(c => c.ComponentType != ComponentType.Agent).ToList();
-        var suites = new List<HarnessSuiteViewModel>();
+    private static List<RecommendedComponentItem> EvaluateSuitePairings(
+        EccComponent agent,
+        RecommendedComponentItem leadItem,
+        List<EccComponent> nonAgents,
+        HashSet<string> selectedStacks,
+        string selectedArch,
+        string selectedProjectType,
+        string selectedLifecycle,
+        bool isCompact)
+    {
+        var minSkillOrCommandScore = isCompact ? 40 : 30;
+        const int minRuleScore = 30;
+        var agentTokens = ExtractCoreTokens(agent.Name);
+        var agentRoles = agent.GetSdlcRoleTokens();
+        var pairedCandidates = new List<RecommendedComponentItem>();
 
-        foreach (var (agent, leadItem, coveredRoles) in topAgents)
+        foreach (var candidate in nonAgents)
         {
-            var agentTokens = ExtractCoreTokens(agent.Name);
-            var agentRoles = agent.GetSdlcRoleTokens();
-
-            var pairedCandidates = new List<RecommendedComponentItem>();
-            foreach (var candidate in nonAgents)
+            var candStacks = candidate.GetTechStackTokens();
+            if (!IsTechStackCompatible(candStacks, selectedStacks, out var matchedStacks, out var hasCommon))
             {
-                var candStacks = candidate.GetTechStackTokens();
-                if (!IsTechStackCompatible(candStacks, selectedStacks, out var matchedStacks, out var hasCommon))
-                {
-                    continue;
-                }
+                continue;
+            }
 
-                var pairScore = 0;
-                var pairReasons = new List<string>();
+            var pairScore = 0;
+            var pairReasons = new List<string>();
 
-                var candRoles = candidate.GetSdlcRoleTokens();
-                var overlapRoles = agentRoles.Intersect(candRoles, StringComparer.OrdinalIgnoreCase).ToList();
-                if (overlapRoles.Count > 0)
-                {
-                    var roleBonus = Math.Min(overlapRoles.Count * 15, 35);
-                    pairScore += roleBonus;
-                    pairReasons.Add($"與 {agent.Name} 共同涵蓋角色（{string.Join(", ", overlapRoles)}）(+{roleBonus})");
-                }
+            var candRoles = candidate.GetSdlcRoleTokens();
+            var overlapRoles = agentRoles.Intersect(candRoles, StringComparer.OrdinalIgnoreCase).ToList();
+            if (overlapRoles.Count > 0)
+            {
+                var roleBonus = Math.Min(overlapRoles.Count * 15, 35);
+                pairScore += roleBonus;
+                pairReasons.Add($"與 {agent.Name} 共同涵蓋角色（{string.Join(", ", overlapRoles)}）(+{roleBonus})");
+            }
 
-                if (matchedStacks.Count > 0)
-                {
-                    var stackBonus = Math.Min(matchedStacks.Count * 20, 40);
-                    pairScore += stackBonus;
-                    pairReasons.Add($"符合專案技術棧：{string.Join(", ", matchedStacks)} (+{stackBonus})");
-                }
-                else if (hasCommon)
-                {
-                    pairScore += 15;
-                    pairReasons.Add("通用跨技術棧規範 (+15)");
-                }
+            if (matchedStacks.Count > 0)
+            {
+                var stackBonus = Math.Min(matchedStacks.Count * 20, 40);
+                pairScore += stackBonus;
+                pairReasons.Add($"符合專案技術棧：{string.Join(", ", matchedStacks)} (+{stackBonus})");
+            }
+            else if (hasCommon)
+            {
+                pairScore += 15;
+                pairReasons.Add("通用跨技術棧規範 (+15)");
+            }
 
-                var matchedTokens = agentTokens
-                    .Where(t => candidate.Name.Contains(t, StringComparison.OrdinalIgnoreCase) ||
-                                candidate.Path.Contains(t, StringComparison.OrdinalIgnoreCase))
+            var isGameContext = string.Equals(selectedProjectType, "Game", StringComparison.OrdinalIgnoreCase) ||
+                selectedStacks.Contains("luau") ||
+                selectedStacks.Contains("godot") ||
+                selectedStacks.Contains("cpp");
+
+            if (isGameContext &&
+                !string.IsNullOrEmpty(selectedArch) &&
+                candidate.GetArchStyleTokens().Contains(selectedArch, StringComparer.OrdinalIgnoreCase))
+            {
+                pairScore += 15;
+                pairReasons.Add($"符合專案架構：{selectedArch.ToUpperInvariant()} (+15)");
+            }
+
+            if (isGameContext &&
+                selectedStacks.Contains("luau") &&
+                (candStacks.Contains("luau", StringComparer.OrdinalIgnoreCase) ||
+                 candidate.Name.Contains("roblox", StringComparison.OrdinalIgnoreCase) ||
+                 candidate.Name.Contains("luau", StringComparison.OrdinalIgnoreCase)))
+            {
+                pairScore += 15;
+                pairReasons.Add("符合 Roblox / Luau 遊戲開發套件 (+15)");
+            }
+
+            var matchedTokens = agentTokens
+                .Where(t => candidate.Name.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+                            candidate.Path.Contains(t, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (matchedTokens.Count > 0)
+            {
+                pairScore += 35;
+                pairReasons.Add($"與 {agent.Name} 領域高度互補：{string.Join(", ", matchedTokens)} (+35)");
+            }
+            else
+            {
+                var descTokens = agentTokens
+                    .Where(t => candidate.DescriptionEn.Contains(t, StringComparison.OrdinalIgnoreCase))
                     .ToList();
-
-                if (matchedTokens.Count > 0)
+                if (descTokens.Count > 0)
                 {
-                    pairScore += 35;
-                    pairReasons.Add($"與 {agent.Name} 領域高度互補：{string.Join(", ", matchedTokens)} (+35)");
-                }
-                else
-                {
-                    var descTokens = agentTokens
-                        .Where(t => candidate.DescriptionEn.Contains(t, StringComparison.OrdinalIgnoreCase))
-                        .ToList();
-                    if (descTokens.Count > 0)
-                    {
-                        pairScore += 20;
-                        pairReasons.Add($"功能描述與 {agent.Name} 互補：{string.Join(", ", descTokens)} (+20)");
-                    }
-                }
-
-                var lifecycleBonus = ComputeLifecycleBonus(selectedLifecycle, candidate, out var lifecycleReason);
-                if (lifecycleBonus > 0 && lifecycleReason is not null)
-                {
-                    pairScore += 15;
-                    pairReasons.Add($"{lifecycleReason} (+15)");
-                }
-
-                var requiredPairScore = candidate.ComponentType == ComponentType.Rule
-                    ? minRuleScore
-                    : minSkillOrCommandScore;
-
-                if (pairScore >= requiredPairScore)
-                {
-                    var roleLabel = overlapRoles.FirstOrDefault() ?? leadItem.Role;
-                    pairedCandidates.Add(ToRecommendedItem(
-                        candidate,
-                        roleLabel,
-                        GetRoleDisplayName(roleLabel),
-                        pairScore,
-                        pairReasons));
+                    pairScore += 20;
+                    pairReasons.Add($"功能描述與 {agent.Name} 互補：{string.Join(", ", descTokens)} (+20)");
                 }
             }
 
-            suites.Add(new HarnessSuiteViewModel
+            var lifecycleBonus = ComputeLifecycleBonus(selectedLifecycle, candidate, out var lifecycleReason);
+            if (lifecycleBonus > 0 && lifecycleReason is not null)
             {
-                SuiteId = $"suite-{agent.Id}",
-                LeadAgent = leadItem,
-                CoveredRoles = coveredRoles.OrderBy(r => r, StringComparer.OrdinalIgnoreCase).ToList(),
-                PairedSkills = pairedCandidates
-                    .Where(c => c.ComponentType == ComponentType.Skill)
-                    .OrderByDescending(c => c.Score)
-                    .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
-                    .Take(maxSkills)
-                    .ToList(),
-                PairedRules = pairedCandidates
-                    .Where(c => c.ComponentType == ComponentType.Rule)
-                    .OrderByDescending(c => c.Score)
-                    .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
-                    .Take(maxRules)
-                    .ToList(),
-                PairedCommands = pairedCandidates
-                    .Where(c => c.ComponentType == ComponentType.Command)
-                    .OrderByDescending(c => c.Score)
-                    .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
-                    .Take(maxCommands)
-                    .ToList()
-            });
+                pairScore += 15;
+                pairReasons.Add($"{lifecycleReason} (+15)");
+            }
+
+            var requiredPairScore = candidate.ComponentType == ComponentType.Rule
+                ? minRuleScore
+                : minSkillOrCommandScore;
+
+            if (pairScore >= requiredPairScore)
+            {
+                var roleLabel = overlapRoles.FirstOrDefault() ?? leadItem.Role;
+                pairedCandidates.Add(ToRecommendedItem(
+                    candidate,
+                    roleLabel,
+                    GetRoleDisplayName(roleLabel),
+                    pairScore,
+                    pairReasons));
+            }
         }
 
-        return suites;
+        return pairedCandidates;
     }
+
+    private static HarnessSuiteViewModel BuildSuiteViewModel(
+        int agentId,
+        RecommendedComponentItem leadItem,
+        HashSet<string> coveredRoles,
+        List<RecommendedComponentItem> pairedCandidates,
+        bool isCompact)
+    {
+        var maxSkills = isCompact ? 2 : 3;
+        var maxRules = isCompact ? 2 : 3;
+        var maxCommands = isCompact ? 1 : 2;
+
+        return new HarnessSuiteViewModel
+        {
+            SuiteId = $"suite-{agentId}",
+            LeadAgent = leadItem,
+            CoveredRoles = coveredRoles.OrderBy(r => r, StringComparer.OrdinalIgnoreCase).ToList(),
+            PairedSkills = TakeTopPairedByType(pairedCandidates, ComponentType.Skill, maxSkills),
+            PairedRules = TakeTopPairedByType(pairedCandidates, ComponentType.Rule, maxRules),
+            PairedCommands = TakeTopPairedByType(pairedCandidates, ComponentType.Command, maxCommands)
+        };
+    }
+
+    private static List<RecommendedComponentItem> TakeTopPairedByType(
+        List<RecommendedComponentItem> pairedCandidates,
+        ComponentType type,
+        int limit) =>
+        pairedCandidates
+            .Where(c => c.ComponentType == type)
+            .OrderByDescending(c => c.Score)
+            .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(limit)
+            .ToList();
 
     private static List<string> ExtractCoreTokens(string agentName)
     {
@@ -529,6 +605,7 @@ public class RecommendationService : IRecommendationService
         string projectType,
         string targetRole,
         EccComponent component,
+        HashSet<string> selectedStacks,
         IReadOnlyList<string> componentStacks,
         IReadOnlyList<string> componentArches,
         out string? reason)
@@ -538,14 +615,41 @@ public class RecommendationService : IRecommendationService
         if (string.Equals(projectType, "Game", StringComparison.OrdinalIgnoreCase))
         {
             var text = $"{component.Name} {component.Path} {component.DescriptionEn}";
-            if (componentStacks.Contains("luau", StringComparer.OrdinalIgnoreCase) ||
-                componentStacks.Contains("godot", StringComparer.OrdinalIgnoreCase) ||
-                componentStacks.Contains("cpp", StringComparer.OrdinalIgnoreCase) ||
-                text.Contains("godot", StringComparison.OrdinalIgnoreCase) ||
-                text.Contains("gdscript", StringComparison.OrdinalIgnoreCase) ||
-                text.Contains("game", StringComparison.OrdinalIgnoreCase) ||
-                text.Contains("roblox", StringComparison.OrdinalIgnoreCase) ||
-                component.Name.StartsWith("gan-", StringComparison.OrdinalIgnoreCase))
+            if (selectedStacks.Contains("luau"))
+            {
+                if (componentStacks.Contains("luau", StringComparer.OrdinalIgnoreCase) ||
+                    componentArches.Contains("ecs", StringComparer.OrdinalIgnoreCase) ||
+                    text.Contains("roblox", StringComparison.OrdinalIgnoreCase) ||
+                    text.Contains("luau", StringComparison.OrdinalIgnoreCase))
+                {
+                    reason = "符合 Roblox / Luau 遊戲開發特性";
+                    return 20;
+                }
+
+                if (component.Name.StartsWith("gan-", StringComparison.OrdinalIgnoreCase))
+                {
+                    reason = "符合 Game 遊戲開發型態特性";
+                    return 5;
+                }
+
+                if (componentStacks.Contains("godot", StringComparer.OrdinalIgnoreCase) ||
+                    componentStacks.Contains("cpp", StringComparer.OrdinalIgnoreCase) ||
+                    text.Contains("godot", StringComparison.OrdinalIgnoreCase) ||
+                    text.Contains("gdscript", StringComparison.OrdinalIgnoreCase) ||
+                    text.Contains("game", StringComparison.OrdinalIgnoreCase))
+                {
+                    reason = "符合 Game 遊戲開發型態特性";
+                    return 10;
+                }
+            }
+            else if (componentStacks.Contains("luau", StringComparer.OrdinalIgnoreCase) ||
+                     componentStacks.Contains("godot", StringComparer.OrdinalIgnoreCase) ||
+                     componentStacks.Contains("cpp", StringComparer.OrdinalIgnoreCase) ||
+                     text.Contains("godot", StringComparison.OrdinalIgnoreCase) ||
+                     text.Contains("gdscript", StringComparison.OrdinalIgnoreCase) ||
+                     text.Contains("game", StringComparison.OrdinalIgnoreCase) ||
+                     text.Contains("roblox", StringComparison.OrdinalIgnoreCase) ||
+                     component.Name.StartsWith("gan-", StringComparison.OrdinalIgnoreCase))
             {
                 reason = "符合 Game 遊戲開發型態特性";
                 return 15;

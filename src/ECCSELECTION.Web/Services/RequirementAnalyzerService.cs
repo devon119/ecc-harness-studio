@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -158,8 +157,7 @@ public partial class RequirementAnalyzerService : IRequirementAnalyzerService
     {
         if (_httpClient is null ||
             !_llmOptions.Enabled ||
-            string.IsNullOrWhiteSpace(_llmOptions.ApiKey) ||
-            string.IsNullOrWhiteSpace(_llmOptions.Endpoint))
+            string.IsNullOrWhiteSpace(_llmOptions.ApiKey))
         {
             baseline.AnalysisSource = "Deterministic";
             return baseline;
@@ -167,21 +165,11 @@ public partial class RequirementAnalyzerService : IRequirementAnalyzerService
 
         try
         {
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(15));
-
-            var endpoint = _llmOptions.Endpoint.TrimEnd('/');
-            if (!endpoint.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
-            {
-                endpoint += "/chat/completions";
-            }
-
-            var model = string.IsNullOrWhiteSpace(_llmOptions.Model) ? "gpt-4o-mini" : _llmOptions.Model;
             var snippet = combinedText.Length > MaxLlmPromptChars
                 ? combinedText[..MaxLlmPromptChars]
                 : combinedText;
 
-            var systemPrompt = """
+            const string systemPrompt = """
                 你是資深軟體系統架構師。請分析使用者的專案用途說明或需求文件，並只回傳一個合法的 JSON 物件（不要使用 markdown code fence），格式如下：
                 {
                   "projectType": "Web|Mobile|API|Fullstack|Game",
@@ -200,44 +188,25 @@ public partial class RequirementAnalyzerService : IRequirementAnalyzerService
                 }
                 """;
 
-            var payload = new
-            {
-                model,
-                temperature = 0.1,
-                max_tokens = 450,
-                messages = new[]
-                {
-                    new { role = "system", content = systemPrompt },
-                    new { role = "user", content = snippet }
-                }
-            };
+            var responseText = await LlmClientHelper.SendPromptAsync(
+                _httpClient,
+                _llmOptions,
+                systemPrompt,
+                snippet,
+                temperature: 0.1,
+                maxTokens: 450,
+                responseMimeType: "application/json",
+                TimeSpan.FromSeconds(15),
+                _logger,
+                cancellationToken);
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
-            {
-                Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
-            };
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _llmOptions.ApiKey);
-
-            using var response = await _httpClient.SendAsync(request, timeoutCts.Token);
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("LLM requirement analysis returned {StatusCode}. Falling back to deterministic analysis.", response.StatusCode);
-                baseline.AnalysisSource = "Deterministic (LLM Fallback)";
-                return baseline;
-            }
-
-            var responseBody = await response.Content.ReadAsStringAsync(timeoutCts.Token);
-            using var doc = JsonDocument.Parse(responseBody);
-            if (!doc.RootElement.TryGetProperty("choices", out var choices) ||
-                choices.GetArrayLength() == 0 ||
-                !choices[0].TryGetProperty("message", out var message) ||
-                !message.TryGetProperty("content", out var contentElem))
+            if (string.IsNullOrWhiteSpace(responseText))
             {
                 baseline.AnalysisSource = "Deterministic (LLM Fallback)";
                 return baseline;
             }
 
-            var rawJson = StripCodeFence(contentElem.GetString() ?? string.Empty);
+            var rawJson = LlmClientHelper.StripCodeFence(responseText);
             using var parsed = JsonDocument.Parse(rawJson);
             MergeLlmInsights(parsed.RootElement, baseline);
             baseline.AnalysisSource = "LLM + Deterministic";
@@ -361,22 +330,43 @@ public partial class RequirementAnalyzerService : IRequirementAnalyzerService
         }
     }
 
-    private static string StripCodeFence(string text)
+    public void ApplySuggestedAssemblyDefaults(
+        WizardRequestViewModel request,
+        RequirementAnalysisResult? analysis)
     {
-        var trimmed = text.Trim();
-        if (!trimmed.StartsWith("```", StringComparison.Ordinal))
+        var defaults = new HarnessAssemblyOptionsViewModel();
+        var inferred = InferEngineeringCommands(request.ProjectType, request.TechStacks);
+
+        if (string.Equals(request.AssemblyOptions.ProjectName, defaults.ProjectName, StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(analysis?.SuggestedProjectName))
         {
-            return trimmed;
+            request.AssemblyOptions.ProjectName = analysis.SuggestedProjectName;
         }
 
-        var firstNewline = trimmed.IndexOf('\n');
-        var lastFence = trimmed.LastIndexOf("```", StringComparison.Ordinal);
-        if (firstNewline >= 0 && lastFence > firstNewline)
+        if (string.Equals(request.AssemblyOptions.TargetEnvironment, defaults.TargetEnvironment, StringComparison.Ordinal))
         {
-            return trimmed[(firstNewline + 1)..lastFence].Trim();
+            request.AssemblyOptions.TargetEnvironment = analysis?.SuggestedTargetEnvironment ?? inferred.TargetEnvironment;
         }
 
-        return trimmed;
+        if (string.Equals(request.AssemblyOptions.BuildCommand, defaults.BuildCommand, StringComparison.Ordinal))
+        {
+            request.AssemblyOptions.BuildCommand = analysis?.SuggestedBuildCommand ?? inferred.BuildCommand;
+        }
+
+        if (string.Equals(request.AssemblyOptions.FormatCommand, defaults.FormatCommand, StringComparison.Ordinal))
+        {
+            request.AssemblyOptions.FormatCommand = analysis?.SuggestedFormatCommand ?? inferred.FormatCommand;
+        }
+
+        if (string.Equals(request.AssemblyOptions.TestCommand, defaults.TestCommand, StringComparison.Ordinal))
+        {
+            request.AssemblyOptions.TestCommand = analysis?.SuggestedTestCommand ?? inferred.TestCommand;
+        }
+
+        if (string.Equals(request.AssemblyOptions.SecurityScanCommand, defaults.SecurityScanCommand, StringComparison.Ordinal))
+        {
+            request.AssemblyOptions.SecurityScanCommand = analysis?.SuggestedSecurityScanCommand ?? inferred.SecurityScanCommand;
+        }
     }
 
     public RequirementAnalysisResult AnalyzeText(string? combinedText, string? sourceFileName = null)

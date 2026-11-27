@@ -126,11 +126,100 @@ public sealed class CatalogExportServiceTests : IDisposable
             service.ExportAsync(databasePath: "../outside.db", writeFile: false));
     }
 
+    [Fact]
+    public async Task ExportAsync_OutputPathTraversalWhenWriteFileTrue_ThrowsSecurityException()
+    {
+        await SeedSampleDatabaseAsync(_dbFullPath);
+        CatalogExportService service = CreateService();
+
+        await Assert.ThrowsAsync<SecurityException>(() =>
+            service.ExportAsync(
+                databasePath: _dbRelativePath,
+                outputPath: "../outside.json",
+                writeFile: true));
+
+        string outsideAbsolute = Path.Combine(Path.GetTempPath(), $"outside-{Guid.NewGuid():N}.json");
+        await Assert.ThrowsAsync<SecurityException>(() =>
+            service.ExportAsync(
+                databasePath: _dbRelativePath,
+                outputPath: outsideAbsolute,
+                writeFile: true));
+    }
+
+    [Fact]
+    public async Task ExportAsync_StringComponentTypes_NormalizesCaseInsensitivelyWithUnknownFallback()
+    {
+        await SeedStringTypedDatabaseAsync(_dbFullPath);
+        CatalogExportService service = CreateService();
+
+        CatalogExportResult result = await service.ExportAsync(databasePath: _dbRelativePath, writeFile: false);
+
+        Assert.True(result.Success);
+        Assert.Equal(5, result.TotalExported);
+        Assert.Equal(1, result.CountsByType["Agent"]);
+        Assert.Equal(1, result.CountsByType["Skill"]);
+        Assert.Equal(1, result.CountsByType["Rule"]);
+        Assert.Equal(1, result.CountsByType["Command"]);
+        Assert.Equal(1, result.CountsByType["Unknown"]);
+        Assert.Contains(result.PreviewItems, p => p.Name == "a1" && p.ComponentType == "Agent");
+        Assert.Contains(result.PreviewItems, p => p.Name == "s1" && p.ComponentType == "Skill");
+        Assert.Contains(result.PreviewItems, p => p.Name == "r1" && p.ComponentType == "Rule");
+        Assert.Contains(result.PreviewItems, p => p.Name == "c1" && p.ComponentType == "Command");
+        Assert.Contains(result.PreviewItems, p => p.Name == "u1" && p.ComponentType == "Unknown");
+    }
+
     private CatalogExportService CreateService() =>
         new(
             new McpWorkspaceOptions(_tempRoot),
             new WorkspaceGuard(),
             NullLogger<CatalogExportService>.Instance);
+
+    private static async Task SeedStringTypedDatabaseAsync(string dbPath)
+    {
+        var csb = new SqliteConnectionStringBuilder
+        {
+            DataSource = dbPath,
+            Pooling = false
+        };
+
+        await using var connection = new SqliteConnection(csb.ConnectionString);
+        await connection.OpenAsync();
+
+        await using SqliteCommand createCmd = connection.CreateCommand();
+        createCmd.CommandText = """
+            CREATE TABLE EccComponents (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ComponentType TEXT NOT NULL,
+                Name TEXT NOT NULL,
+                Path TEXT NOT NULL UNIQUE,
+                Sha TEXT NOT NULL,
+                RawUrl TEXT NULL,
+                HtmlUrl TEXT NULL,
+                DescriptionEn TEXT NULL,
+                SummaryZh TEXT NULL,
+                SdlcRoles TEXT NULL,
+                TechStacks TEXT NULL,
+                ArchStyles TEXT NULL,
+                UsageGuide TEXT NULL,
+                IsActive INTEGER NOT NULL,
+                IsManuallyEdited INTEGER NOT NULL,
+                LastSyncedAt TEXT NOT NULL
+            );
+            """;
+        await createCmd.ExecuteNonQueryAsync();
+
+        await using SqliteCommand insertCmd = connection.CreateCommand();
+        insertCmd.CommandText = """
+            INSERT INTO EccComponents (ComponentType, Name, Path, Sha, IsActive, IsManuallyEdited, LastSyncedAt)
+            VALUES
+            ('agent', 'a1', 'agents/a1.md', 's1', 1, 0, '2026-11-27T00:00:00Z'),
+            ('SKILL', 's1', 'skills/s1/SKILL.md', 's2', 1, 0, '2026-11-27T00:00:00Z'),
+            ('Rule', 'r1', 'rules/r1.md', 's3', 1, 0, '2026-11-27T00:00:00Z'),
+            ('Command', 'c1', 'commands/c1.md', 's4', 1, 0, '2026-11-27T00:00:00Z'),
+            ('CustomType', 'u1', 'other/u1.md', 's5', 1, 0, '2026-11-27T00:00:00Z');
+            """;
+        await insertCmd.ExecuteNonQueryAsync();
+    }
 
     private static async Task SeedSampleDatabaseAsync(string dbPath)
     {

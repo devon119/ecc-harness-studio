@@ -4,7 +4,7 @@
 - **建立日期**：2026-11-26
 - **撰寫角色**：SA / 規格 Agent
 - **目標專案**：`ECCSELECTION`（`ECCSELECTION.slnx`）
-- **狀態**：待人類確認（Human-in-the-Loop Gate）
+- **狀態**：已實作並通過驗證（2026-11-27）
 
 ---
 
@@ -207,7 +207,7 @@ ECCSELECTION.slnx
      WHERE IsActive = 1
      ORDER BY ComponentType ASC, Name ASC
      ```
-  4. 將 `ComponentType` 整數值映射為字串（`0 -> "Agent"`, `1 -> "Skill"`, `2 -> "Rule"`, `3 -> "Command"`），產出與 `gh-pages:data/catalog.json` 完全相容之 PascalCase JSON 陣列（排除 `Sha`、`LastSyncedAt`、`IsActive`、`IsManuallyEdited`）。
+  4. 因 `AppDbContext` 設定 `EccComponent.ComponentType` 使用 `.HasConversion<string>()`，實際資料庫欄位為字串（`"Agent"`, `"Skill"`, `"Rule"`, `"Command"`）；`CatalogExportService` 須以字串安全讀取並正規化為標準 PascalCase 名稱（同時向下相容舊版整數／數字字串 `"0"`–`"3"`，對應 `0 -> "Agent"`, `1 -> "Skill"`, `2 -> "Rule"`, `3 -> "Command"`），產出與 `gh-pages:data/catalog.json` 完全相容之 PascalCase JSON 陣列（排除 `Sha`、`LastSyncedAt`、`IsActive`、`IsManuallyEdited`）。
   5. 若 `writeFile == true`，寫入 `outputPath`；否則於回傳物件提供統計資訊與預覽/JSON 字串。
 - **結構化回傳格式**：
   ```json
@@ -274,7 +274,8 @@ ECCSELECTION.slnx
   2. **`CS001`（Error）— 禁止空 `catch` 區塊**：
      - 掃描 `src/ECCSELECTION.Web/**/*.cs`（排除 `bin/`、`obj/`），偵測 `catch` 區塊大括號內無任何實質陳述式（僅含空白或註解）。
   3. **`SEC001`（Error）— Controller POST/PUT/DELETE/PATCH 須具備 Antiforgery 保護**：
-     - 掃描 `src/ECCSELECTION.Web/Controllers/**/*.cs`，若 Action 標註 `[HttpPost]`、`[HttpPut]`、`[HttpDelete]` 或 `[HttpPatch]`，則該方法或所屬 Controller 必須標註 `[ValidateAntiForgeryToken]`（若標註 `[IgnoreAntiforgeryToken]` 則降為 `warning` 供審查）。
+     - 掃描 `src/ECCSELECTION.Web/Controllers/**/*.cs`，若 Action 標註 `[HttpPost]`、`[HttpPut]`、`[HttpDelete]` 或 `[HttpPatch]`，則該方法或所屬 Controller 必須標註 `[ValidateAntiForgeryToken]` 或 `[AutoValidateAntiforgeryToken]`（忽略大小寫；若標註 `[IgnoreAntiforgeryToken]` 則降為 `warning` 供審查）。
+     - 屬性解析器須支援括號層數追蹤（跳過字串常值內之括號），正確合併跨多行屬性（如 `[HttpPost(\n "...")]`）後再進行判定。
   4. **`UI002`（Warning）— 前端 `innerHTML` 賦值提示**：
      - 掃描 `wwwroot/js/**/*.js` 中的 `.innerHTML =`，列為 `warning` 提醒確認無未消毒之動態 HTML 拼接。
 - **結構化回傳格式**：
@@ -331,7 +332,7 @@ ECCSELECTION.slnx
 ```json
 {
   "mcpServers": {
-    "eccselection-workflow": {
+    "eccselection": {
       "command": "D:/T01_GIT/ECCSELECTION/tools/ECCSELECTION.Mcp/bin/Release/net10.0/ECCSELECTION.Mcp.exe",
       "args": [],
       "env": {
@@ -347,7 +348,7 @@ ECCSELECTION.slnx
 ```json
 {
   "mcpServers": {
-    "eccselection-workflow": {
+    "eccselection": {
       "command": "dotnet",
       "args": [
         "run",
@@ -363,7 +364,7 @@ ECCSELECTION.slnx
 }
 ```
 
-> **驗證方式**：設定完成並先執行一次 `dotnet build tools/ECCSELECTION.Mcp/ECCSELECTION.Mcp.csproj -c Release` 後，於 Antigravity UI 點選 **Additional Options (...) > MCP Servers**，確認 `eccselection-workflow` 顯示連線成功且列出上述 5 個 Tools。
+> **驗證方式**：設定完成並先執行一次 `dotnet build tools/ECCSELECTION.Mcp/ECCSELECTION.Mcp.csproj -c Release` 後，於 Antigravity UI 點選 **Additional Options (...) > MCP Servers**，確認 `eccselection` 顯示連線成功且列出上述 5 個 Tools。
 
 ---
 
@@ -384,7 +385,7 @@ ECCSELECTION.slnx
 
 ## 7. 人類確認閘門（Human-in-the-Loop Checklist）
 
-- [ ] 確認 `tools/ECCSELECTION.Mcp/` 目錄位置與納入 `ECCSELECTION.slnx`（`/tools/` 資料夾）之設計。
-- [ ] 確認 5 個 MCP Tools 名稱、參數預設值（特別是 `sync_and_publish_lite` 預設 `dryRun: true`、`export_catalog_json` 預設 `writeFile: false`）與回傳結構。
-- [ ] 確認安全性與寫入邊界設計（路徑遍歷防護、`ArgumentList` 防命令注入、`gh-pages` worktree 隔離）。
-- [ ] 核准進入下一階段：由後端實作 Agent 與測試 Agent 依本規格進行開發與 xUnit 測試。
+- [x] 確認 `tools/ECCSELECTION.Mcp/` 目錄位置與納入 `ECCSELECTION.slnx`（`/tools/` 資料夾）之設計。
+- [x] 確認 5 個 MCP Tools 名稱、參數預設值（特別是 `sync_and_publish_lite` 預設 `dryRun: true`、`export_catalog_json` 預設 `writeFile: false`）與回傳結構。
+- [x] 確認安全性與寫入邊界設計（路徑遍歷防護、`ArgumentList` 防命令注入、`gh-pages` worktree 隔離）。
+- [x] 核准進入下一階段：由後端實作 Agent 與測試 Agent 依本規格進行開發與 xUnit 測試（2026-11-27 已完成實作並通過驗證）。

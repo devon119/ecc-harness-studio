@@ -95,6 +95,50 @@ public sealed class PagesSyncServiceTests : IDisposable
         Assert.Empty(runner.GitInvocations);
     }
 
+    [Fact]
+    public async Task SyncAndPublishAsync_MissingMainBranch_ReturnsFailureWithoutCreatingWorktree()
+    {
+        var runner = new FakeGitRunner(worktreeBranch: "gh-pages", porcelainStatus: string.Empty, mainBranchExists: false);
+        PagesSyncService service = CreateService(runner);
+
+        PagesSyncResult result = await service.SyncAndPublishAsync(dryRun: false);
+
+        Assert.False(result.Success);
+        Assert.False(result.Pushed);
+        Assert.Contains("main", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(runner.GitInvocations, args => args is ["worktree", "add", _, _]);
+    }
+
+    [Fact]
+    public async Task SyncAndPublishAsync_MissingGhPagesBranch_ReturnsFailureWithoutCreatingWorktree()
+    {
+        var runner = new FakeGitRunner(worktreeBranch: "gh-pages", porcelainStatus: string.Empty, ghPagesBranchExists: false);
+        PagesSyncService service = CreateService(runner);
+
+        PagesSyncResult result = await service.SyncAndPublishAsync(dryRun: false);
+
+        Assert.False(result.Success);
+        Assert.False(result.Pushed);
+        Assert.Contains("gh-pages", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(runner.GitInvocations, args => args is ["worktree", "add", _, _]);
+    }
+
+    [Fact]
+    public async Task SyncAndPublishAsync_DryRunFalseWithEmptyPorcelainStatus_SkipsCommitAndPush()
+    {
+        var runner = new FakeGitRunner(worktreeBranch: "gh-pages", porcelainStatus: string.Empty);
+        PagesSyncService service = CreateService(runner);
+
+        PagesSyncResult result = await service.SyncAndPublishAsync(dryRun: false);
+
+        Assert.True(result.Success);
+        Assert.False(result.DryRun);
+        Assert.False(result.Pushed);
+        Assert.DoesNotContain(runner.GitInvocations, args => args.Contains("commit"));
+        Assert.DoesNotContain(runner.GitInvocations, args => args.Contains("push"));
+        Assert.Contains(runner.GitInvocations, args => args is ["worktree", "remove", "--force", _]);
+    }
+
     private PagesSyncService CreateService(IProcessRunner runner)
     {
         var options = new McpWorkspaceOptions(_tempRoot);
@@ -112,7 +156,11 @@ public sealed class PagesSyncServiceTests : IDisposable
             NullLogger<PagesSyncService>.Instance);
     }
 
-    private sealed class FakeGitRunner(string worktreeBranch, string porcelainStatus) : IProcessRunner
+    private sealed class FakeGitRunner(
+        string worktreeBranch,
+        string porcelainStatus,
+        bool mainBranchExists = true,
+        bool ghPagesBranchExists = true) : IProcessRunner
     {
         public List<string[]> GitInvocations { get; } = [];
 
@@ -128,12 +176,16 @@ public sealed class PagesSyncServiceTests : IDisposable
 
             if (args is ["rev-parse", "--verify", "main"])
             {
-                return Task.FromResult(new ProcessResult(0, "1111111111111111111111111111111111111111", string.Empty, false, 10));
+                return Task.FromResult(mainBranchExists
+                    ? new ProcessResult(0, "1111111111111111111111111111111111111111", string.Empty, false, 10)
+                    : new ProcessResult(128, string.Empty, "fatal: Needed a single revision", false, 10));
             }
 
             if (args is ["rev-parse", "--verify", "gh-pages"])
             {
-                return Task.FromResult(new ProcessResult(0, "2222222222222222222222222222222222222222", string.Empty, false, 10));
+                return Task.FromResult(ghPagesBranchExists
+                    ? new ProcessResult(0, "2222222222222222222222222222222222222222", string.Empty, false, 10)
+                    : new ProcessResult(128, string.Empty, "fatal: Needed a single revision", false, 10));
             }
 
             if (args.Length == 4 && args[0] == "archive" && args[2].StartsWith("--output=", StringComparison.Ordinal))

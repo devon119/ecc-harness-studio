@@ -14,4 +14,14 @@ public interface IGeminiCurationService
         WizardResultViewModel result,
         string rawJson,
         out string? errorMessage);
+
+    bool ApplyExternalCuration(
+        WizardResultViewModel baselineResult,
+        string? rawJson,
+        out string? errorMessage);
+
+    Task<string> SaveLocalGeminiKeyAsync(
+        string apiKey,
+        string? model,
+        CancellationToken cancellationToken = default);
 }

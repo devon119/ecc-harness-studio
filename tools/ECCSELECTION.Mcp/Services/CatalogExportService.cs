@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using ECCSELECTION.Mcp.Options;
@@ -182,10 +183,12 @@ public sealed class CatalogExportService
         await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            int typeValue = reader.GetInt32(1);
+            string rawType = reader.IsDBNull(1)
+                ? string.Empty
+                : Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? string.Empty;
             items.Add(new CatalogExportItem(
                 Id: reader.GetInt32(0),
-                ComponentType: MapComponentType(typeValue),
+                ComponentType: NormalizeComponentType(rawType),
                 Name: reader.GetString(2),
                 Path: reader.GetString(3),
                 RawUrl: reader.IsDBNull(4) ? null : reader.GetString(4),
@@ -202,14 +205,36 @@ public sealed class CatalogExportService
         return (items, json);
     }
 
-    private static string MapComponentType(int componentType) => componentType switch
+    private static string NormalizeComponentType(string rawType)
     {
-        0 => "Agent",
-        1 => "Skill",
-        2 => "Rule",
-        3 => "Command",
-        _ => "Unknown"
-    };
+        if (string.IsNullOrWhiteSpace(rawType))
+        {
+            return "Unknown";
+        }
+
+        string trimmed = rawType.Trim();
+        if (trimmed.Equals("Agent", StringComparison.OrdinalIgnoreCase) || trimmed == "0")
+        {
+            return "Agent";
+        }
+
+        if (trimmed.Equals("Skill", StringComparison.OrdinalIgnoreCase) || trimmed == "1")
+        {
+            return "Skill";
+        }
+
+        if (trimmed.Equals("Rule", StringComparison.OrdinalIgnoreCase) || trimmed == "2")
+        {
+            return "Rule";
+        }
+
+        if (trimmed.Equals("Command", StringComparison.OrdinalIgnoreCase) || trimmed == "3")
+        {
+            return "Command";
+        }
+
+        return "Unknown";
+    }
 
     private static Dictionary<string, int> BuildCountsByType(IReadOnlyList<CatalogExportItem> items)
     {

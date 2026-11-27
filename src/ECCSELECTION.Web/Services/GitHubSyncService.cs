@@ -153,7 +153,9 @@ public class GitHubSyncService : IGitHubSyncService
 
             foreach (var existing in existingByPath.Values)
             {
-                if (existing.IsActive && !seenPaths.Contains(existing.Path))
+                if (existing.IsActive &&
+                    !existing.Path.StartsWith("builtin/", StringComparison.OrdinalIgnoreCase) &&
+                    !seenPaths.Contains(existing.Path))
                 {
                     existing.IsActive = false;
                     existing.LastSyncedAt = now;
@@ -174,10 +176,21 @@ public class GitHubSyncService : IGitHubSyncService
         catch (Exception ex)
         {
             _logger.LogError(ex, "GitHub sync failed for {Owner}/{Repo}@{Branch}.", _options.Owner, _options.Repo, _options.Branch);
+            _dbContext.ChangeTracker.Clear();
             syncLog.CompletedAt = DateTime.UtcNow;
             syncLog.Status = SyncStatus.Failed;
             syncLog.ErrorMessage = ex.Message;
-            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            if (syncLog.Id > 0)
+            {
+                _dbContext.SyncLogs.Update(syncLog);
+            }
+            else
+            {
+                _dbContext.SyncLogs.Add(syncLog);
+            }
+
+            await _dbContext.SaveChangesAsync(CancellationToken.None);
             return syncLog;
         }
     }
@@ -235,6 +248,13 @@ public class GitHubSyncService : IGitHubSyncService
             }
 
             return await response.Content.ReadAsStringAsync(cancellationToken);
+        }
+        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            var msg = $"Raw download timed out for {path}: {ex.Message}";
+            _logger.LogWarning(ex, "Raw download timed out for {Path}", path);
+            errors.Add(msg);
+            return null;
         }
         catch (HttpRequestException ex)
         {

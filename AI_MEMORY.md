@@ -85,3 +85,21 @@
   4. `create_spec_file`：依 `docs/specs/SPEC_<YYYYMMDD>_<TOPIC>.md` 建立獨立規格書骨架，硬編碼拒絕修改 `SPEC_ECCSELECTION.md`。
   5. `check_ui_contracts`：唯讀靜態掃描 `UI001`（`<table>`）、`CS001`（空 `catch`）、`SEC001`（Antiforgery）與 `UI002`（`innerHTML`）。
 - **安全契約**：`LogToStandardErrorThreshold = LogLevel.Trace` 隔離 `stderr`/`stdout`、`WorkspaceGuard` 路徑遍歷防護、`ProcessRunner` 禁用 shell 拼接（`ArgumentList`）。若修改 `tools/ECCSELECTION.Mcp/` 原始碼，須重新建置 Release 版並重載 MCP Server。
+
+
+---
+
+## 7. v1.7 全專案稽核修復與 MCP 契約強化（2026-11-27）
+- **`ECCSELECTION.Mcp`（`tools/ECCSELECTION.Mcp/`，註冊鍵名 `eccselection`）**：
+  - `CatalogExportService` 必須以字串讀取 SQLite `EccComponents.ComponentType`（對應 `AppDbContext` `.HasConversion<string>()`，並向下相容 `"0"`–`"3"`），禁止以 `GetInt32` 讀取。
+  - `UiContractCheckerService` 支援 `[AutoValidateAntiforgeryToken]`（大小寫不拘）與括號層數追蹤之跨多行屬性掃描。
+- **統一 LLM Helper（`LlmClientHelper`）**：
+  - `LlmEnrichmentService`、`RequirementAnalyzerService`、`GeminiCurationService` 共用 `LlmClientHelper`（集中 `StripCodeFence`、OpenAI `/chat/completions` 與原生 Gemini `generativelanguage.googleapis.com` + `x-goog-api-key` + `:generateContent` 支援），無效 `Endpoint` URI 安全降級不拋出 `UriFormatException`。
+- **同步韌性與打包安全契約**：
+  - `GitHubSyncService`：`catch` 區塊先 `ChangeTracker.Clear()` 並以 `CancellationToken.None` 寫入 `Failed` `SyncLog`；`TryFetchRawContentAsync` 捕捉非外部取消之 `TaskCanceledException` 降級為 `PartialSuccess`。
+  - `HarnessBundleService`：`BuildSafeLocalPath` 淨化 `component.Name` 中的 `/`、`\` 與非法字元；僅對 `https://raw.githubusercontent.com` 請求附帶 `PersonalAccessToken`。
+  - `RecommendationService`：`AdditionalCandidates` 與 `Groups` 統一依 `GetTypePriority` 排序。
+- **MVC 分層與靜態版對齊**：
+  - `WizardController` 不直接執行檔案 I/O 或組建預設推斷，統一委派 `GeminiCurationService` / `RequirementAnalyzerService`；`Wizard/Result.cshtml` `ExportMarkdown` 表單須保留 `ProjectPurpose`、`RequirementKeywords` 與 `AssemblyOptions.*` 隱藏欄位。
+  - `main:docs/`（`index.html`、`app.js`、`css/icon3d.css`）已對齊 `gh-pages` v1.6 3D UI（零 `<table>`）。
+  - 品質閘門基線：152 / 152 測試全數通過、AgentShield Grade A（100/100）、`check_ui_contracts` 54 檔 0 錯誤。

@@ -13,4 +13,8 @@ public interface IRequirementAnalyzerService
     RequirementAnalysisResult AnalyzeText(
         string? combinedText,
         string? sourceFileName = null);
+
+    void ApplySuggestedAssemblyDefaults(
+        WizardRequestViewModel request,
+        RequirementAnalysisResult? analysis);
 }

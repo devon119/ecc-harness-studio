@@ -1,10 +1,10 @@
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using ECCSELECTION.Web.Models.Enums;
 using ECCSELECTION.Web.Options;
 using ECCSELECTION.Web.Services.Interfaces;
 using ECCSELECTION.Web.ViewModels;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -17,15 +17,18 @@ public class GeminiCurationService : IGeminiCurationService
     private readonly HttpClient _httpClient;
     private readonly IOptionsMonitor<LlmEnrichmentOptions> _optionsMonitor;
     private readonly ILogger<GeminiCurationService> _logger;
+    private readonly IWebHostEnvironment? _environment;
 
     public GeminiCurationService(
         HttpClient httpClient,
         IOptionsMonitor<LlmEnrichmentOptions> optionsMonitor,
-        ILogger<GeminiCurationService> logger)
+        ILogger<GeminiCurationService> logger,
+        IWebHostEnvironment? environment = null)
     {
         _httpClient = httpClient;
         _optionsMonitor = optionsMonitor;
         _logger = logger;
+        _environment = environment;
     }
 
     public bool IsApiConfigured
@@ -93,7 +96,7 @@ public class GeminiCurationService : IGeminiCurationService
 
         try
         {
-            var cleaned = StripCodeFence(rawJson);
+            var cleaned = LlmClientHelper.StripCodeFence(rawJson);
             using var doc = JsonDocument.Parse(cleaned);
             var root = doc.RootElement;
 
@@ -155,105 +158,63 @@ public class GeminiCurationService : IGeminiCurationService
         }
     }
 
+    public bool ApplyExternalCuration(
+        WizardResultViewModel baselineResult,
+        string? rawJson,
+        out string? errorMessage)
+    {
+        var candidates = CollectUniqueCandidates(baselineResult).Take(35).ToList();
+        baselineResult.IsGeminiApiConfigured = IsApiConfigured;
+        baselineResult.ChromeGeminiPrompt = BuildCurationPrompt(baselineResult.Request, candidates);
+        baselineResult.HarnessPlaybookMarkdown = BuildDeterministicPlaybook(baselineResult);
+
+        return TryApplyExternalCurationJson(baselineResult, rawJson ?? string.Empty, out errorMessage);
+    }
+
+    public async Task<string> SaveLocalGeminiKeyAsync(
+        string apiKey,
+        string? model,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            throw new ArgumentException("請輸入有效的 Gemini API Key。", nameof(apiKey));
+        }
+
+        var selectedModel = string.IsNullOrWhiteSpace(model) ? DefaultGeminiModel : model.Trim();
+        var contentRoot = _environment?.ContentRootPath ?? Directory.GetCurrentDirectory();
+        var localConfigPath = Path.Combine(contentRoot, "appsettings.Development.local.json");
+
+        var payload = new
+        {
+            LlmEnrichment = new
+            {
+                Enabled = true,
+                Endpoint = "https://generativelanguage.googleapis.com/v1beta",
+                ApiKey = apiKey.Trim(),
+                Model = selectedModel
+            }
+        };
+
+        var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+        await File.WriteAllTextAsync(localConfigPath, json, Encoding.UTF8, cancellationToken);
+        return selectedModel;
+    }
+
     private async Task<string?> CallGeminiAsync(string prompt, CancellationToken cancellationToken)
     {
         var opts = _optionsMonitor.CurrentValue;
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(TimeSpan.FromSeconds(20));
-
-        var model = string.IsNullOrWhiteSpace(opts.Model) ? DefaultGeminiModel : opts.Model.Trim();
-        var endpoint = (opts.Endpoint ?? string.Empty).Trim();
-
-        // Use native Gemini REST API when Endpoint is blank or points to generativelanguage without /openai
-        if (string.IsNullOrWhiteSpace(endpoint) ||
-            (endpoint.Contains("generativelanguage.googleapis.com", StringComparison.OrdinalIgnoreCase) &&
-             !endpoint.Contains("/openai", StringComparison.OrdinalIgnoreCase)))
-        {
-            var url = $"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(model)}:generateContent";
-            var payload = new
-            {
-                contents = new[]
-                {
-                    new
-                    {
-                        parts = new[] { new { text = prompt } }
-                    }
-                },
-                generationConfig = new
-                {
-                    temperature = 0.1,
-                    responseMimeType = "application/json"
-                }
-            };
-
-            using var request = new HttpRequestMessage(HttpMethod.Post, url)
-            {
-                Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
-            };
-            request.Headers.Add("x-goog-api-key", opts.ApiKey.Trim());
-
-            using var response = await _httpClient.SendAsync(request, timeoutCts.Token);
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("Native Gemini API returned {StatusCode}.", response.StatusCode);
-                return null;
-            }
-
-            var json = await response.Content.ReadAsStringAsync(timeoutCts.Token);
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty("candidates", out var candidates) &&
-                candidates.GetArrayLength() > 0 &&
-                candidates[0].TryGetProperty("content", out var content) &&
-                content.TryGetProperty("parts", out var parts) &&
-                parts.GetArrayLength() > 0 &&
-                parts[0].TryGetProperty("text", out var textElem))
-            {
-                return textElem.GetString();
-            }
-
-            return null;
-        }
-
-        // OpenAI-compatible endpoint fallback
-        var openAiUrl = endpoint.TrimEnd('/');
-        if (!openAiUrl.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
-        {
-            openAiUrl += "/chat/completions";
-        }
-
-        var openAiPayload = new
-        {
-            model,
-            temperature = 0.1,
-            messages = new[]
-            {
-                new { role = "user", content = prompt }
-            }
-        };
-
-        using var openAiReq = new HttpRequestMessage(HttpMethod.Post, openAiUrl)
-        {
-            Content = new StringContent(JsonSerializer.Serialize(openAiPayload), Encoding.UTF8, "application/json")
-        };
-        openAiReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", opts.ApiKey.Trim());
-
-        using var openAiRes = await _httpClient.SendAsync(openAiReq, timeoutCts.Token);
-        if (!openAiRes.IsSuccessStatusCode)
-        {
-            return null;
-        }
-
-        var openAiJson = await openAiRes.Content.ReadAsStringAsync(timeoutCts.Token);
-        using var openAiDoc = JsonDocument.Parse(openAiJson);
-        if (openAiDoc.RootElement.TryGetProperty("choices", out var choices) &&
-            choices.GetArrayLength() > 0 &&
-            choices[0].TryGetProperty("message", out var msg) &&
-            msg.TryGetProperty("content", out var contentEl))
-        {
-            return contentEl.GetString();
-        }
-
-        return null;
+        return await LlmClientHelper.SendPromptAsync(
+            _httpClient,
+            opts,
+            systemPrompt: null,
+            userPrompt: prompt,
+            temperature: 0.1,
+            maxTokens: null,
+            responseMimeType: "application/json",
+            TimeSpan.FromSeconds(20),
+            _logger,
+            cancellationToken);
     }
 
     private static void ApplyCurationSelection(
@@ -421,23 +382,5 @@ public class GeminiCurationService : IGeminiCurationService
         sb.AppendLine($"- **IDE 自動載入規則 & Hooks**：{(opts.IncludeIdeAutoRules ? $"已啟用 — 自動載入 `AGENTS.md`、`CLAUDE.md`、`.agents/rules/workflow-guardrails.md`，並透過 `.claude/settings.json` 的 `permissions.deny`（阻擋 `{opts.ProtectedPaths}` 與 `rm -rf`）及 `PreToolUse` / `Stop` Hooks 防堵。" : "未啟用")}");
 
         return sb.ToString();
-    }
-
-    private static string StripCodeFence(string text)
-    {
-        var trimmed = text.Trim();
-        if (!trimmed.StartsWith("```", StringComparison.Ordinal))
-        {
-            return trimmed;
-        }
-
-        var firstNewline = trimmed.IndexOf('\n');
-        var lastFence = trimmed.LastIndexOf("```", StringComparison.Ordinal);
-        if (firstNewline >= 0 && lastFence > firstNewline)
-        {
-            return trimmed[(firstNewline + 1)..lastFence].Trim();
-        }
-
-        return trimmed;
     }
 }

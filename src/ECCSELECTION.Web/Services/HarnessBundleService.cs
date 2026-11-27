@@ -8,6 +8,7 @@ using ECCSELECTION.Web.Models.Enums;
 using ECCSELECTION.Web.Options;
 using ECCSELECTION.Web.Services.Interfaces;
 using ECCSELECTION.Web.ViewModels;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -16,21 +17,27 @@ namespace ECCSELECTION.Web.Services;
 
 public class HarnessBundleService : IHarnessBundleService
 {
+    private const string BuiltInPrefix = "builtin/";
     private readonly AppDbContext _dbContext;
     private readonly HttpClient _httpClient;
     private readonly GitHubSyncOptions _options;
     private readonly ILogger<HarnessBundleService> _logger;
+    private readonly string _contentRootPath;
 
     public HarnessBundleService(
         AppDbContext dbContext,
         HttpClient httpClient,
         IOptions<GitHubSyncOptions> options,
-        ILogger<HarnessBundleService> logger)
+        ILogger<HarnessBundleService> logger,
+        IWebHostEnvironment? environment = null)
     {
         _dbContext = dbContext;
         _httpClient = httpClient;
         _options = options.Value;
         _logger = logger;
+        _contentRootPath = string.IsNullOrWhiteSpace(environment?.ContentRootPath)
+            ? AppContext.BaseDirectory
+            : environment.ContentRootPath;
     }
 
     public Task<byte[]> BuildBundleZipAsync(
@@ -62,75 +69,18 @@ public class HarnessBundleService : IHarnessBundleService
         using var memoryStream = new MemoryStream();
         using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, leaveOpen: true))
         {
-            var manifest = new StringBuilder();
-            manifest.AppendLine($"# {opts.ProjectName} — ECC Harness 組建套件清單");
-            manifest.AppendLine();
-            manifest.AppendLine($"- **產生時間 (UTC)**：{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
-            manifest.AppendLine($"- **專案名稱**：`{opts.ProjectName}`");
-            manifest.AppendLine($"- **目標環境**：`{opts.TargetEnvironment}`");
-            manifest.AppendLine($"- **目標平台**：`{opts.TargetPlatform}`");
-            manifest.AppendLine($"- **包含元件數量**：{components.Count}");
-            manifest.AppendLine();
-            manifest.AppendLine("## 一鍵啟用步驟");
-            manifest.AppendLine("1. 將壓縮檔內容解壓縮至目標專案根目錄。");
-            if (opts.IncludeGitPreCommitHook)
-            {
-                manifest.AppendLine("2. 啟用 Git 提交前卡點：`powershell -ExecutionPolicy Bypass -File scripts/install-hooks.ps1`（或 `bash scripts/install-hooks.sh`）。");
-            }
-
-            if (opts.RequireTestsBeforeDone || opts.IncludeIdeAutoRules)
-            {
-                manifest.AppendLine("3. 執行品質閘門驗證：`powershell -ExecutionPolicy Bypass -File scripts/quality-gate.ps1`（或 `bash scripts/quality-gate.sh`）。");
-            }
-
-            manifest.AppendLine();
-            AppendBeginnerGovernanceGuide(manifest, opts.SpecFilePath);
-            manifest.AppendLine("## 已選取元件清單");
-            manifest.AppendLine("| 類型 | 名稱 | 目標路徑 | 來源 Raw URL |");
-            manifest.AppendLine("| :--- | :--- | :--- | :--- |");
-
+            var manifest = BuildManifestHeader(opts, components.Count);
             var errors = new List<string>();
             var addedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var skillTreePaths = components.Any(c => c.ComponentType == ComponentType.Skill)
-                ? await FetchRepoBlobPathsAsync(cancellationToken)
-                : [];
-            var rootDir = string.Equals(opts.TargetPlatform, "Antigravity", StringComparison.OrdinalIgnoreCase)
-                ? ".ecc"
-                : ".claude";
 
-            foreach (var component in components)
-            {
-                var entryPath = BuildSafeLocalPath(component, opts.TargetPlatform);
-                if (!addedPaths.Add(entryPath))
-                {
-                    continue;
-                }
-
-                var (content, errorMessage) = await DownloadRawContentAsync(component.RawUrl, cancellationToken);
-                if (content is null)
-                {
-                    errors.Add($"{component.Name} ({component.RawUrl}): {errorMessage}");
-                    manifest.AppendLine($"| {component.ComponentType} | `{component.Name}` | `{entryPath}` (下載失敗) | {component.RawUrl} |");
-                    continue;
-                }
-
-                await WriteBytesEntryAsync(archive, entryPath, content, cancellationToken);
-
-                manifest.AppendLine($"| {component.ComponentType} | `{component.Name}` | `{entryPath}` | {component.RawUrl} |");
-
-                if (component.ComponentType == ComponentType.Skill && skillTreePaths.Count > 0)
-                {
-                    await BundleSkillAuxiliaryFilesAsync(
-                        archive,
-                        component,
-                        rootDir,
-                        skillTreePaths,
-                        addedPaths,
-                        errors,
-                        manifest,
-                        cancellationToken);
-                }
-            }
+            await AddSelectedComponentsToArchiveAsync(
+                archive,
+                opts,
+                components,
+                addedPaths,
+                errors,
+                manifest,
+                cancellationToken);
 
             await WriteGuardrailArtifactsAsync(archive, opts, components, addedPaths, cancellationToken);
             if (!string.IsNullOrWhiteSpace(opts.HarnessPlaybookMarkdown) && addedPaths.Add("HARNESS_PLAYBOOK.md"))
@@ -151,6 +101,92 @@ public class HarnessBundleService : IHarnessBundleService
         }
 
         return memoryStream.ToArray();
+    }
+
+    private static StringBuilder BuildManifestHeader(HarnessAssemblyOptionsViewModel opts, int componentCount)
+    {
+        var manifest = new StringBuilder();
+        manifest.AppendLine($"# {opts.ProjectName} — ECC Harness 組建套件清單");
+        manifest.AppendLine();
+        manifest.AppendLine($"- **產生時間 (UTC)**：{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
+        manifest.AppendLine($"- **專案名稱**：`{opts.ProjectName}`");
+        manifest.AppendLine($"- **目標環境**：`{opts.TargetEnvironment}`");
+        manifest.AppendLine($"- **目標平台**：`{opts.TargetPlatform}`");
+        manifest.AppendLine($"- **包含元件數量**：{componentCount}");
+        manifest.AppendLine();
+        manifest.AppendLine("## 一鍵啟用步驟");
+        manifest.AppendLine("1. 將壓縮檔內容解壓縮至目標專案根目錄。");
+        if (opts.IncludeGitPreCommitHook)
+        {
+            manifest.AppendLine("2. 啟用 Git 提交前卡點：`powershell -ExecutionPolicy Bypass -File scripts/install-hooks.ps1`（或 `bash scripts/install-hooks.sh`）。");
+        }
+
+        if (opts.RequireTestsBeforeDone || opts.IncludeIdeAutoRules)
+        {
+            manifest.AppendLine("3. 執行品質閘門驗證：`powershell -ExecutionPolicy Bypass -File scripts/quality-gate.ps1`（或 `bash scripts/quality-gate.sh`）。");
+        }
+
+        manifest.AppendLine();
+        AppendBeginnerGovernanceGuide(manifest, opts.SpecFilePath);
+        manifest.AppendLine("## 已選取元件清單");
+        manifest.AppendLine("| 類型 | 名稱 | 目標路徑 | 來源 Raw URL |");
+        manifest.AppendLine("| :--- | :--- | :--- | :--- |");
+        return manifest;
+    }
+
+    private async Task AddSelectedComponentsToArchiveAsync(
+        ZipArchive archive,
+        HarnessAssemblyOptionsViewModel opts,
+        IReadOnlyList<EccComponent> components,
+        HashSet<string> addedPaths,
+        List<string> errors,
+        StringBuilder manifest,
+        CancellationToken cancellationToken)
+    {
+        var hasExternalSkills = components.Any(c =>
+            c.ComponentType == ComponentType.Skill && !IsBuiltInPath(c.Path));
+        var skillTreePaths = hasExternalSkills
+            ? await FetchRepoBlobPathsAsync(cancellationToken)
+            : [];
+        var rootDir = string.Equals(opts.TargetPlatform, "Antigravity", StringComparison.OrdinalIgnoreCase)
+            ? ".ecc"
+            : ".claude";
+
+        foreach (var component in components)
+        {
+            var entryPath = BuildSafeLocalPath(component, opts.TargetPlatform);
+            if (!addedPaths.Add(entryPath))
+            {
+                continue;
+            }
+
+            var isBuiltIn = IsBuiltInPath(component.Path);
+            var (content, errorMessage) = isBuiltIn
+                ? await ReadBuiltInContentAsync(component.Path, cancellationToken)
+                : await DownloadRawContentAsync(component.RawUrl, cancellationToken);
+            if (content is null)
+            {
+                errors.Add($"{component.Name} ({component.RawUrl}): {errorMessage}");
+                manifest.AppendLine($"| {component.ComponentType} | `{component.Name}` | `{entryPath}` (下載失敗) | {component.RawUrl} |");
+                continue;
+            }
+
+            await WriteBytesEntryAsync(archive, entryPath, content, cancellationToken);
+            manifest.AppendLine($"| {component.ComponentType} | `{component.Name}` | `{entryPath}` | {component.RawUrl} |");
+
+            if (!isBuiltIn && component.ComponentType == ComponentType.Skill && skillTreePaths.Count > 0)
+            {
+                await BundleSkillAuxiliaryFilesAsync(
+                    archive,
+                    component,
+                    rootDir,
+                    skillTreePaths,
+                    addedPaths,
+                    errors,
+                    manifest,
+                    cancellationToken);
+            }
+        }
     }
 
     private static async Task WriteGuardrailArtifactsAsync(
@@ -598,7 +634,8 @@ public class HarnessBundleService : IHarnessBundleService
             using var request = new HttpRequestMessage(HttpMethod.Get, rawUrl);
             request.Headers.UserAgent.ParseAdd("ECCSELECTION-Bundle/1.0");
 
-            if (!string.IsNullOrWhiteSpace(_options.PersonalAccessToken))
+            if (!string.IsNullOrWhiteSpace(_options.PersonalAccessToken) &&
+                IsAllowedRawGitHubUri(rawUrl))
             {
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.PersonalAccessToken);
             }
@@ -716,22 +753,118 @@ public class HarnessBundleService : IHarnessBundleService
         }
     }
 
+    private static bool IsBuiltInPath(string? path) =>
+        !string.IsNullOrWhiteSpace(path) &&
+        path.TrimStart().StartsWith(BuiltInPrefix, StringComparison.OrdinalIgnoreCase);
+
+    private async Task<(byte[]? Content, string? Error)> ReadBuiltInContentAsync(
+        string componentPath,
+        CancellationToken cancellationToken)
+    {
+        var normalized = (componentPath ?? string.Empty).Trim().Replace('\\', '/');
+        if (!normalized.StartsWith(BuiltInPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return (null, "Invalid built-in component path prefix.");
+        }
+
+        var subPath = normalized[BuiltInPrefix.Length..].TrimStart('/');
+        if (string.IsNullOrWhiteSpace(subPath) ||
+            subPath.Contains("..", StringComparison.Ordinal) ||
+            Path.IsPathRooted(subPath))
+        {
+            _logger.LogWarning("Rejected unsafe built-in component path: {Path}", componentPath);
+            return (null, "Unsafe built-in component path.");
+        }
+
+        var builtInRoot = Path.GetFullPath(Path.Combine(_contentRootPath, "BuiltInEcc"));
+        var builtInRootWithSeparator = builtInRoot.EndsWith(Path.DirectorySeparatorChar)
+            ? builtInRoot
+            : builtInRoot + Path.DirectorySeparatorChar;
+        var fullPath = Path.GetFullPath(Path.Combine(builtInRoot, subPath.Replace('/', Path.DirectorySeparatorChar)));
+
+        if (!fullPath.StartsWith(builtInRootWithSeparator, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning("Path traversal attempt blocked for built-in component path: {Path}", componentPath);
+            return (null, "Built-in component path escapes root directory.");
+        }
+
+        if (!File.Exists(fullPath))
+        {
+            _logger.LogWarning("Built-in component file not found at {FullPath}", fullPath);
+            return (null, $"Built-in file not found: {subPath}");
+        }
+
+        try
+        {
+            var bytes = await File.ReadAllBytesAsync(fullPath, cancellationToken);
+            return (bytes, null);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Failed to read built-in component file at {FullPath}", fullPath);
+            return (null, ex.Message);
+        }
+    }
+
+    private static bool IsAllowedRawGitHubUri(string rawUrl) =>
+        Uri.TryCreate(rawUrl, UriKind.Absolute, out var uri) &&
+        uri.Scheme == Uri.UriSchemeHttps &&
+        string.Equals(uri.Host, "raw.githubusercontent.com", StringComparison.OrdinalIgnoreCase);
+
     private static string BuildSafeLocalPath(EccComponent component, string targetPlatform)
     {
         var rootDir = string.Equals(targetPlatform, "Antigravity", StringComparison.OrdinalIgnoreCase)
             ? ".ecc"
             : ".claude";
-        var repoPath = (component.Path ?? string.Empty).Replace('\\', '/').TrimStart('/');
+        var safeName = SanitizeFileNameSegment(component.Name);
+        var safeRepoPath = SanitizeRelativeRepoPath(component.Path);
+
         var suggested = component.ComponentType switch
         {
-            ComponentType.Agent => $"{rootDir}/agents/{component.Name}.md",
-            ComponentType.Skill => $"{rootDir}/skills/{component.Name}/SKILL.md",
-            ComponentType.Command => $"{rootDir}/commands/{component.Name}.md",
-            ComponentType.Rule => $"{rootDir}/{repoPath}",
-            _ => $"{rootDir}/{repoPath}"
+            ComponentType.Agent => $"{rootDir}/agents/{safeName}.md",
+            ComponentType.Skill => $"{rootDir}/skills/{safeName}/SKILL.md",
+            ComponentType.Command => $"{rootDir}/commands/{safeName}.md",
+            ComponentType.Rule => $"{rootDir}/{safeRepoPath}",
+            _ => $"{rootDir}/{safeRepoPath}"
         };
 
-        return suggested.Replace("..", string.Empty).TrimStart('/');
+        return suggested.Replace("..", string.Empty, StringComparison.Ordinal).TrimStart('/');
+    }
+
+    private static string SanitizeFileNameSegment(string? rawName)
+    {
+        if (string.IsNullOrWhiteSpace(rawName))
+        {
+            return "component";
+        }
+
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var sb = new StringBuilder(rawName.Length);
+        foreach (var ch in rawName.Trim())
+        {
+            if (ch == '/' || ch == '\\' || Array.IndexOf(invalidChars, ch) >= 0)
+            {
+                sb.Append('-');
+            }
+            else
+            {
+                sb.Append(ch);
+            }
+        }
+
+        var sanitized = sb.ToString().Replace("..", "-", StringComparison.Ordinal).Trim('-');
+        return string.IsNullOrWhiteSpace(sanitized) ? "component" : sanitized;
+    }
+
+    private static string SanitizeRelativeRepoPath(string? rawPath)
+    {
+        var segments = (rawPath ?? string.Empty)
+            .Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Where(s => s != "." && s != "..")
+            .ToArray();
+
+        return segments.Length == 0 ? "component.md" : string.Join('/', segments);
     }
 
     private static async Task WriteBytesEntryAsync(

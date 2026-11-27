@@ -6,8 +6,21 @@
 | **工作區路徑** | [D:\T01_GIT\ECCSELECTION](file:///D:/T01_GIT/ECCSELECTION) |
 | **依據規格書** | [SPEC_ECCSELECTION.md](file:///D:/T01_GIT/ECCSELECTION/SPEC_ECCSELECTION.md) |
 | **審計角色** | 驗收審計員（`validator`） |
-| **審計日期** | 2026-11-25 |
-| **整體結論** | **核心建置、單元測試（8/8）、首次真實 GitHub 全量同步（620 筆）與專案內含檔案均已親眼驗證通過；實機二次增量同步與 Web UI 端到端操作標示為「未驗證（僅具靜態實作／單元測試證據）」。** |
+| **審計日期** | 2026-11-27（初版基準：2026-11-25） |
+| **整體結論** | **2026-11-27 Phase 1–3 全專案深度稽核修復完成並通過全項品質閘門：編譯 0 警告 0 錯誤、`dotnet format` 通過、152/152 單元測試通過、AgentShield 100/100（Grade A，0 findings）、`check_ui_contracts` 54 檔 0 錯誤 0 警告，且本機 `http://localhost:5109` 實機 Web UI 全路由與 `ExportMarkdown` 表單驗證通過。** |
+
+---
+
+## 零、2026-11-27 Phase 1–3 稽核修復後實測總表（`SPEC_20261127_FULL_AUDIT_REMEDIATION`）
+
+| 檢查項目 | 執行指令 / 驗證方式 | 2026-11-27 實測結果 | 狀態 |
+| :--- | :--- | :--- | :--- |
+| **1. 編譯檢查** | `dotnet build ECCSELECTION.slnx -warnaserror` | **0 警告、0 錯誤**（含 `ECCSELECTION.Web`、`ECCSELECTION.Mcp`、`ECCSELECTION.Tests`） | ✅ **已驗證** |
+| **2. 格式檢查** | `dotnet format ECCSELECTION.slnx --verify-no-changes --no-restore` | **通過**（無待修正格式差異） | ✅ **已驗證** |
+| **3. 單元測試** | `dotnet test ECCSELECTION.slnx --no-build --verbosity normal --collect:"XPlat Code Coverage"` | **152 / 152 通過**（0 失敗、0 略過） | ✅ **已驗證** |
+| **4. 安全掃描** | `npx --yes ecc-agentshield scan --path . --format text` | **Grade A（100/100），0 findings** | ✅ **已驗證** |
+| **5. UI 靜態契約** | `check_ui_contracts(targetScope="all")` | 掃描 **54** 個檔案，**0 errors、0 warnings** | ✅ **已驗證** |
+| **6. 實機 Web UI** | Kestrel `http://localhost:5109` 實機瀏覽驗證 | `/`, `/Catalog`, `/Sync`, `/Wizard`, `/Wizard/Recommend` 全數 **HTTP 200**；**0 個 `<table>`**、**0 Console Errors**；3D SVG 圖示正常渲染；`/Wizard/Recommend` 之 `ExportMarkdown` 表單含 **28 個隱藏欄位** 驗證通過 | ✅ **已驗證** |
 
 ---
 

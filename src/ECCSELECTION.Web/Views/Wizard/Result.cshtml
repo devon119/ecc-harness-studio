@@ -33,6 +33,24 @@
             <input type="hidden" name="ProjectLifecycle" value="@Model.Request.ProjectLifecycle" />
             <input type="hidden" name="ArchStyle" value="@Model.Request.ArchStyle" />
             <input type="hidden" name="Mode" value="@Model.Request.Mode" />
+            <input type="hidden" name="ProjectPurpose" value="@Model.Request.ProjectPurpose" />
+            <input type="hidden" name="UploadedDocumentName" value="@Model.Request.UploadedDocumentName" />
+            <input type="hidden" name="AssemblyOptions.ProjectName" value="@Model.Request.AssemblyOptions.ProjectName" />
+            <input type="hidden" name="AssemblyOptions.SpecFilePath" value="@Model.Request.AssemblyOptions.SpecFilePath" />
+            <input type="hidden" name="AssemblyOptions.TargetEnvironment" value="@Model.Request.AssemblyOptions.TargetEnvironment" />
+            <input type="hidden" name="AssemblyOptions.BuildCommand" value="@Model.Request.AssemblyOptions.BuildCommand" />
+            <input type="hidden" name="AssemblyOptions.FormatCommand" value="@Model.Request.AssemblyOptions.FormatCommand" />
+            <input type="hidden" name="AssemblyOptions.TestCommand" value="@Model.Request.AssemblyOptions.TestCommand" />
+            <input type="hidden" name="AssemblyOptions.SecurityScanCommand" value="@Model.Request.AssemblyOptions.SecurityScanCommand" />
+            <input type="hidden" name="AssemblyOptions.DevServerUrl" value="@Model.Request.AssemblyOptions.DevServerUrl" />
+            <input type="hidden" name="AssemblyOptions.ScopeGuardNote" value="@Model.Request.AssemblyOptions.ScopeGuardNote" />
+            <input type="hidden" name="AssemblyOptions.ProtectedPaths" value="@Model.Request.AssemblyOptions.ProtectedPaths" />
+            <input type="hidden" name="AssemblyOptions.TargetPlatform" value="@Model.Request.AssemblyOptions.TargetPlatform" />
+            <input type="hidden" name="AssemblyOptions.RequireSpecFirst" value="@Model.Request.AssemblyOptions.RequireSpecFirst.ToString().ToLowerInvariant()" />
+            <input type="hidden" name="AssemblyOptions.RequireTestsBeforeDone" value="@Model.Request.AssemblyOptions.RequireTestsBeforeDone.ToString().ToLowerInvariant()" />
+            <input type="hidden" name="AssemblyOptions.RequireEvidenceOutput" value="@Model.Request.AssemblyOptions.RequireEvidenceOutput.ToString().ToLowerInvariant()" />
+            <input type="hidden" name="AssemblyOptions.IncludeGitPreCommitHook" value="@Model.Request.AssemblyOptions.IncludeGitPreCommitHook.ToString().ToLowerInvariant()" />
+            <input type="hidden" name="AssemblyOptions.IncludeIdeAutoRules" value="@Model.Request.AssemblyOptions.IncludeIdeAutoRules.ToString().ToLowerInvariant()" />
             @foreach (var stack in Model.Request.TechStacks)
             {
                 <input type="hidden" name="TechStacks" value="@stack" />
@@ -40,6 +58,10 @@
             @foreach (var role in Model.Request.SdlcRoles)
             {
                 <input type="hidden" name="SdlcRoles" value="@role" />
+            }
+            @foreach (var kw in Model.Request.RequirementKeywords)
+            {
+                <input type="hidden" name="RequirementKeywords" value="@kw" />
             }
             <button type="submit" class="btn btn-outline-success">匯出推薦摘要 (.md)</button>
         </form>

@@ -90,4 +90,36 @@ public class EccParserServiceTests
         Assert.Contains("SA", result.SdlcRoles);
         Assert.Contains("QA", result.SdlcRoles);
     }
+
+    [Theory]
+    [InlineData("Design world systems using ECS with CollectionService tags.")]
+    [InlineData("Use an Entity Component architecture for deterministic game loop updates.")]
+    public void Parse_EcsAndEntityComponentKeywords_InfersEcsArchStyle(string body)
+    {
+        var markdown = $"""
+            # Game System Architecture
+
+            {body}
+            """;
+
+        var result = _parser.Parse(ComponentType.Rule, "rules/common/game-architecture.md", markdown);
+
+        Assert.Contains("ecs", result.ArchStyles.Split(',', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    [Theory]
+    [InlineData("builtin/roblox/rules/luau-strict-coding.md")]
+    [InlineData("rules/luau/strict.md")]
+    public void Parse_RobloxOrLuauPaths_InfersLuauTechStack(string path)
+    {
+        var markdown = """
+            # Strict Typing
+
+            Enforce strict static typing and safe task scheduling.
+            """;
+
+        var result = _parser.Parse(ComponentType.Rule, path, markdown);
+
+        Assert.Contains("luau", result.TechStacks.Split(',', StringSplitOptions.RemoveEmptyEntries));
+    }
 }

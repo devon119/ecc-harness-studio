@@ -197,6 +197,68 @@ public sealed class UiContractCheckerServiceTests : IDisposable
         Assert.Contains("targetScope", result.ErrorMessage);
     }
 
+    [Fact]
+    public async Task CheckAsync_AutoValidateAntiforgeryTokenAtControllerAndActionLevel_PassesSec001()
+    {
+        await File.WriteAllTextAsync(
+            Path.Combine(_webRoot, "Controllers", "AutoController.cs"),
+            """
+            [AutoValidateAntiforgeryToken]
+            public class AutoController
+            {
+                [HttpPost]
+                public IActionResult Save() => Ok();
+            }
+            """);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(_webRoot, "Controllers", "ActionAutoController.cs"),
+            """
+            public class ActionAutoController
+            {
+                [HttpPost]
+                [AutoValidateAntiforgeryToken]
+                public IActionResult Save() => Ok();
+            }
+            """);
+
+        UiContractCheckerService service = CreateService();
+        UiContractCheckResult result = await service.CheckAsync("csharp");
+
+        Assert.True(result.Passed);
+        Assert.Equal(0, result.Summary.ErrorCount);
+        Assert.DoesNotContain(result.Violations, v => v.RuleId == "SEC001");
+    }
+
+    [Fact]
+    public async Task CheckAsync_MultiLineHttpPostAttribute_ParsesCorrectly()
+    {
+        await File.WriteAllTextAsync(
+            Path.Combine(_webRoot, "Controllers", "MultiLineController.cs"),
+            """
+            public class MultiLineController
+            {
+                [HttpPost(
+                    "save/[action]")]
+                [ValidateAntiForgeryToken]
+                public IActionResult SafeMultiLine() => Ok();
+
+                [HttpPost(
+                    "unsafe")]
+                public IActionResult UnsafeMultiLine() => Ok();
+            }
+            """);
+
+        UiContractCheckerService service = CreateService();
+        UiContractCheckResult result = await service.CheckAsync("csharp");
+
+        Assert.False(result.Passed);
+        Assert.Equal(1, result.Summary.ErrorCount);
+        UiContractViolation violation = Assert.Single(result.Violations);
+        Assert.Equal("SEC001", violation.RuleId);
+        Assert.Contains("UnsafeMultiLine", violation.Snippet);
+    }
+
     private UiContractCheckerService CreateService() =>
         new(new McpWorkspaceOptions(_tempRoot), new WorkspaceGuard());
 }

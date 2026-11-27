@@ -132,6 +132,35 @@ public sealed class QualityGateServiceTests : IDisposable
         Assert.Empty(runner.Calls);
     }
 
+    [Fact]
+    public async Task RunAsync_MissingScript_ReturnsErrorWithoutInvokingRunner()
+    {
+        File.Delete(Path.Combine(_tempRoot, "scripts", "quality-gate.ps1"));
+        var runner = new FakeProcessRunner((_, _, _, _) =>
+            throw new InvalidOperationException("Should not be called."));
+        QualityGateService service = CreateService(runner);
+
+        QualityGateResult result = await service.RunAsync(stopRunningWebProcess: false);
+
+        Assert.False(result.Passed);
+        Assert.Equal(-1, result.ExitCode);
+        Assert.Contains("not found", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(runner.Calls);
+    }
+
+    [Fact]
+    public async Task RunAsync_InvalidWorkspaceRoot_ThrowsInvalidOperationException()
+    {
+        File.Delete(Path.Combine(_tempRoot, "ECCSELECTION.slnx"));
+        var runner = new FakeProcessRunner((_, _, _, _) =>
+            throw new InvalidOperationException("Should not be called."));
+        QualityGateService service = CreateService(runner);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.RunAsync(stopRunningWebProcess: false));
+        Assert.Empty(runner.Calls);
+    }
+
     private QualityGateService CreateService(IProcessRunner runner) =>
         new(
             new McpWorkspaceOptions(_tempRoot),

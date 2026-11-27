@@ -73,7 +73,7 @@ public sealed partial class UiContractCheckerService
     [GeneratedRegex(@"^\s*\[(?:HttpPost|HttpPut|HttpDelete|HttpPatch)\b", RegexOptions.IgnoreCase)]
     private static partial Regex MutatingHttpAttributeRegex();
 
-    [GeneratedRegex(@"\[ValidateAntiForgeryToken\b", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\[(?:ValidateAntiForgeryToken|AutoValidateAntiforgeryToken)(?:Attribute)?\b", RegexOptions.IgnoreCase)]
     private static partial Regex ValidateAntiforgeryRegex();
 
     [GeneratedRegex(@"\[IgnoreAntiforgeryToken\b", RegexOptions.IgnoreCase)]
@@ -322,10 +322,30 @@ public sealed partial class UiContractCheckerService
         bool classHasIgnore = false;
         bool insideClass = false;
         var pendingAttributes = new List<(int Line, string Text)>();
+        StringBuilder? currentAttribute = null;
+        int currentAttributeStartLine = 0;
+        int bracketDepth = 0;
+        bool inVerbatimString = false;
 
         for (int i = 0; i < lines.Length; i++)
         {
             string trimmed = lines[i].Trim();
+
+            if (currentAttribute is not null)
+            {
+                currentAttribute.Append(' ').Append(trimmed);
+                bracketDepth = UpdateBracketDepth(trimmed, bracketDepth, ref inVerbatimString);
+                if (bracketDepth <= 0)
+                {
+                    pendingAttributes.Add((currentAttributeStartLine, currentAttribute.ToString()));
+                    currentAttribute = null;
+                    bracketDepth = 0;
+                    inVerbatimString = false;
+                }
+
+                continue;
+            }
+
             if (trimmed.StartsWith("//", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(trimmed))
             {
                 continue;
@@ -333,7 +353,20 @@ public sealed partial class UiContractCheckerService
 
             if (trimmed.StartsWith('['))
             {
-                pendingAttributes.Add((i + 1, trimmed));
+                inVerbatimString = false;
+                bracketDepth = UpdateBracketDepth(trimmed, 0, ref inVerbatimString);
+                if (bracketDepth <= 0)
+                {
+                    pendingAttributes.Add((i + 1, trimmed));
+                    bracketDepth = 0;
+                    inVerbatimString = false;
+                }
+                else
+                {
+                    currentAttributeStartLine = i + 1;
+                    currentAttribute = new StringBuilder(trimmed);
+                }
+
                 continue;
             }
 
@@ -359,6 +392,98 @@ public sealed partial class UiContractCheckerService
                 pendingAttributes.Clear();
             }
         }
+    }
+
+    private static int UpdateBracketDepth(string line, int currentDepth, ref bool inVerbatimString)
+    {
+        int depth = currentDepth;
+        bool inString = false;
+        bool inChar = false;
+
+        for (int i = 0; i < line.Length; i++)
+        {
+            char c = line[i];
+
+            if (inVerbatimString)
+            {
+                if (c == '"')
+                {
+                    if (i + 1 < line.Length && line[i + 1] == '"')
+                    {
+                        i++;
+                    }
+                    else
+                    {
+                        inVerbatimString = false;
+                    }
+                }
+
+                continue;
+            }
+
+            if (inString)
+            {
+                if (c == '\\')
+                {
+                    i++;
+                }
+                else if (c == '"')
+                {
+                    inString = false;
+                }
+
+                continue;
+            }
+
+            if (inChar)
+            {
+                if (c == '\\')
+                {
+                    i++;
+                }
+                else if (c == '\'')
+                {
+                    inChar = false;
+                }
+
+                continue;
+            }
+
+            if (c == '/' && i + 1 < line.Length && line[i + 1] == '/')
+            {
+                break;
+            }
+
+            if (c == '@' && i + 1 < line.Length && line[i + 1] == '"')
+            {
+                inVerbatimString = true;
+                i++;
+                continue;
+            }
+
+            if (c == '"')
+            {
+                inString = true;
+                continue;
+            }
+
+            if (c == '\'')
+            {
+                inChar = true;
+                continue;
+            }
+
+            if (c == '[')
+            {
+                depth++;
+            }
+            else if (c == ']')
+            {
+                depth--;
+            }
+        }
+
+        return depth;
     }
 
     private static void EvaluateMutatingActionAntiforgery(

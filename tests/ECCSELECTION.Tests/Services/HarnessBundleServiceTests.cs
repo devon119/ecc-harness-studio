@@ -2,11 +2,15 @@ using System.IO.Compression;
 using System.Net;
 using System.Text;
 using ECCSELECTION.Tests.Helpers;
+using ECCSELECTION.Web.Data;
 using ECCSELECTION.Web.Models;
 using ECCSELECTION.Web.Models.Enums;
 using ECCSELECTION.Web.Options;
 using ECCSELECTION.Web.Services;
 using ECCSELECTION.Web.ViewModels;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -423,5 +427,196 @@ public class HarnessBundleServiceTests
         Assert.Contains("6. 強制品質閘門", content);
         Assert.Contains("7. 文件同步", content);
         Assert.Contains("### 給新手的協作操作指引", content);
+    }
+
+    [Fact]
+    public async Task BuildBundleZipAsync_SanitizesSlashAndBackslashInComponentName_AndProtectsPatFromExternalHosts()
+    {
+        using var dbScope = new TestDbContextScope();
+        dbScope.Context.EccComponents.AddRange(
+            new EccComponent
+            {
+                Id = 100,
+                ComponentType = ComponentType.Agent,
+                Name = "../../evil/agent\\name",
+                Path = "agents/evil-agent.md",
+                Sha = "sha100",
+                RawUrl = "https://raw.githubusercontent.com/affaan-m/ECC/main/agents/evil-agent.md",
+                IsActive = true
+            },
+            new EccComponent
+            {
+                Id = 101,
+                ComponentType = ComponentType.Rule,
+                Name = "external-rule",
+                Path = "rules/external.md",
+                Sha = "sha101",
+                RawUrl = "https://untrusted.example.com/rules/external.md",
+                IsActive = true
+            });
+        await dbScope.Context.SaveChangesAsync();
+
+        var capturedAuthByHost = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        var handler = new StubHttpMessageHandler(req =>
+        {
+            capturedAuthByHost[req.RequestUri!.Host] = req.Headers.Authorization?.Parameter;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("# Content", Encoding.UTF8)
+            };
+        });
+
+        var service = new HarnessBundleService(
+            dbScope.Context,
+            new HttpClient(handler),
+            Options.Create(new GitHubSyncOptions { PersonalAccessToken = "ghp_secret_token" }),
+            NullLogger<HarnessBundleService>.Instance);
+
+        byte[] zipBytes = await service.BuildBundleZipAsync([100, 101]);
+
+        using var ms = new MemoryStream(zipBytes);
+        using var archive = new ZipArchive(ms, ZipArchiveMode.Read);
+
+        Assert.DoesNotContain(archive.Entries, e => e.FullName.Contains(".."));
+        Assert.DoesNotContain(archive.Entries, e => e.FullName.Contains('\\'));
+        Assert.Contains(archive.Entries, e => e.FullName.StartsWith(".claude/agents/", StringComparison.Ordinal) && e.FullName.EndsWith(".md", StringComparison.Ordinal));
+
+        Assert.Equal("ghp_secret_token", capturedAuthByHost["raw.githubusercontent.com"]);
+        Assert.Null(capturedAuthByHost["untrusted.example.com"]);
+    }
+
+    [Fact]
+    public async Task BuildBundleZipAsync_BuiltInRobloxComponents_WritesLocalFilesWithoutExternalHttpRequests()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"ecc-builtin-test-{Guid.NewGuid():N}");
+        try
+        {
+            var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["roblox/agents/roblox-luau-architect.md"] = "# Roblox Luau Architect",
+                ["roblox/skills/roblox-luau-testing/SKILL.md"] = "# Roblox Luau Testing",
+                ["roblox/rules/luau-strict-coding.md"] = "# Luau Strict Coding",
+                ["roblox/commands/roblox-check.md"] = "# Roblox Check"
+            };
+
+            foreach (var (subPath, content) in files)
+            {
+                var fullPath = Path.Combine(tempRoot, "BuiltInEcc", subPath.Replace('/', Path.DirectorySeparatorChar));
+                Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+                await File.WriteAllTextAsync(fullPath, content, Encoding.UTF8);
+            }
+
+            using var dbScope = new TestDbContextScope();
+            await BuiltInEccSeeder.SeedAsync(dbScope.Context);
+
+            var targetPaths = files.Keys.Select(k => $"builtin/{k}").ToArray();
+            var selectedIds = await dbScope.Context.EccComponents
+                .Where(c => targetPaths.Contains(c.Path))
+                .Select(c => c.Id)
+                .ToListAsync();
+            Assert.Equal(4, selectedIds.Count);
+
+            var httpRequestCount = 0;
+            var handler = new StubHttpMessageHandler(_ =>
+            {
+                httpRequestCount++;
+                throw new InvalidOperationException("Built-in components must not trigger external HTTP requests.");
+            });
+
+            var service = new HarnessBundleService(
+                dbScope.Context,
+                new HttpClient(handler),
+                Options.Create(new GitHubSyncOptions()),
+                NullLogger<HarnessBundleService>.Instance,
+                new StubWebHostEnvironment(tempRoot));
+
+            var zipBytes = await service.BuildBundleZipAsync(selectedIds);
+
+            Assert.Equal(0, httpRequestCount);
+
+            using var ms = new MemoryStream(zipBytes);
+            using var archive = new ZipArchive(ms, ZipArchiveMode.Read);
+
+            Assert.Null(archive.GetEntry("DOWNLOAD_ERRORS.txt"));
+            Assert.NotNull(archive.GetEntry(".claude/agents/roblox-luau-architect.md"));
+            Assert.NotNull(archive.GetEntry(".claude/skills/roblox-luau-testing/SKILL.md"));
+            Assert.NotNull(archive.GetEntry(".claude/commands/roblox-check.md"));
+            Assert.Contains(archive.Entries, e =>
+                e.FullName.StartsWith(".claude/", StringComparison.Ordinal) &&
+                e.FullName.EndsWith("luau-strict-coding.md", StringComparison.Ordinal));
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task BuildBundleZipAsync_BuiltInPathTraversalAttempt_RejectsUnsafePath()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"ecc-traversal-test-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(tempRoot, "BuiltInEcc"));
+            await File.WriteAllTextAsync(Path.Combine(tempRoot, "appsettings.json"), "{\"Secret\":\"do-not-leak\"}", Encoding.UTF8);
+
+            using var dbScope = new TestDbContextScope();
+            dbScope.Context.EccComponents.Add(new EccComponent
+            {
+                Id = 200,
+                ComponentType = ComponentType.Rule,
+                Name = "traversal-rule",
+                Path = "builtin/../../appsettings.json",
+                Sha = "sha-traversal",
+                RawUrl = "https://raw.githubusercontent.com/devon119/ecc-harness-studio/main/docs/builtin-ecc/traversal.md",
+                HtmlUrl = "https://github.com/devon119/ecc-harness-studio/blob/main/docs/builtin-ecc/traversal.md",
+                IsActive = true
+            });
+            await dbScope.Context.SaveChangesAsync();
+
+            var handler = new StubHttpMessageHandler(_ =>
+                throw new InvalidOperationException("Built-in traversal path must not fall back to HTTP."));
+
+            var service = new HarnessBundleService(
+                dbScope.Context,
+                new HttpClient(handler),
+                Options.Create(new GitHubSyncOptions()),
+                NullLogger<HarnessBundleService>.Instance,
+                new StubWebHostEnvironment(tempRoot));
+
+            var zipBytes = await service.BuildBundleZipAsync([200]);
+
+            using var ms = new MemoryStream(zipBytes);
+            using var archive = new ZipArchive(ms, ZipArchiveMode.Read);
+
+            Assert.DoesNotContain(archive.Entries, e => e.FullName.Contains("appsettings.json", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(archive.Entries, e => e.FullName.Contains("..", StringComparison.Ordinal));
+
+            var errorEntry = archive.GetEntry("DOWNLOAD_ERRORS.txt");
+            Assert.NotNull(errorEntry);
+            using var reader = new StreamReader(errorEntry!.Open(), Encoding.UTF8);
+            var errorText = await reader.ReadToEndAsync();
+            Assert.Contains("Unsafe built-in component path", errorText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
+    private sealed class StubWebHostEnvironment(string contentRootPath) : IWebHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = "Development";
+        public string ApplicationName { get; set; } = "ECCSELECTION.Tests";
+        public string WebRootPath { get; set; } = contentRootPath;
+        public IFileProvider WebRootFileProvider { get; set; } = new NullFileProvider();
+        public string ContentRootPath { get; set; } = contentRootPath;
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 }

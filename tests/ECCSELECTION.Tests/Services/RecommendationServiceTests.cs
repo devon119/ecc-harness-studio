@@ -1,8 +1,10 @@
 using ECCSELECTION.Tests.Helpers;
+using ECCSELECTION.Web.Data;
 using ECCSELECTION.Web.Models;
 using ECCSELECTION.Web.Models.Enums;
 using ECCSELECTION.Web.Services;
 using ECCSELECTION.Web.ViewModels;
+using Microsoft.EntityFrameworkCore;
 
 namespace ECCSELECTION.Tests.Services;
 
@@ -295,5 +297,116 @@ public class RecommendationServiceTests
         var result = service.Recommend(request, components);
         var qaItem = Assert.Single(result.Groups.Single(g => g.Role == "QA").Items);
         Assert.Contains(qaItem.MatchReasons, r => r.Contains("命中需求關鍵字") && r.Contains("security") && r.Contains("payment"));
+    }
+
+    [Fact]
+    public void Recommend_AdditionalCandidates_SortedByComponentTypeOrderThenScoreDescending()
+    {
+        using var dbScope = new TestDbContextScope();
+        var service = new RecommendationService(dbScope.Context);
+
+        // In Compact mode (maxSuites = 3, maxItemsPerRole = 5), 4 Agents in PG_BE means the 4th Agent is not in Suites,
+        // and Skill/Rule/Command in QA (with no QA Agent) remain outside Suites in AdditionalCandidates,
+        // sorted by GetTypePriority (Agent -> Rule -> Skill -> Command), then Score descending.
+        var components = new List<EccComponent>
+        {
+            new() { Id = 1, ComponentType = ComponentType.Command, Name = "qa-cmd", Path = "commands/qa-cmd.md", SdlcRoles = "QA", TechStacks = "dotnet", ArchStyles = "mvc", IsActive = true },
+            new() { Id = 2, ComponentType = ComponentType.Rule, Name = "qa-rule-low", Path = "rules/qa-rule-low.md", SdlcRoles = "QA", TechStacks = "dotnet", ArchStyles = "general", IsActive = true },
+            new() { Id = 3, ComponentType = ComponentType.Rule, Name = "qa-rule-high", Path = "rules/qa-rule-high.md", SdlcRoles = "QA", TechStacks = "dotnet", ArchStyles = "mvc", IsActive = true },
+            new() { Id = 4, ComponentType = ComponentType.Skill, Name = "qa-skill", Path = "skills/qa-skill/SKILL.md", SdlcRoles = "QA", TechStacks = "dotnet", ArchStyles = "mvc", IsActive = true },
+            new() { Id = 5, ComponentType = ComponentType.Agent, Name = "be-agent-1", Path = "agents/be1.md", SdlcRoles = "PG_BE", TechStacks = "dotnet", ArchStyles = "mvc", IsActive = true },
+            new() { Id = 6, ComponentType = ComponentType.Agent, Name = "be-agent-2", Path = "agents/be2.md", SdlcRoles = "PG_BE", TechStacks = "dotnet", ArchStyles = "mvc", IsActive = true },
+            new() { Id = 7, ComponentType = ComponentType.Agent, Name = "be-agent-3", Path = "agents/be3.md", SdlcRoles = "PG_BE", TechStacks = "dotnet", ArchStyles = "mvc", IsActive = true },
+            new() { Id = 8, ComponentType = ComponentType.Agent, Name = "be-agent-4-extra", Path = "agents/be4.md", SdlcRoles = "PG_BE", TechStacks = "dotnet", ArchStyles = "general", IsActive = true }
+        };
+
+        var request = new WizardRequestViewModel
+        {
+            ProjectType = "Web",
+            ArchStyle = "MVC",
+            TechStacks = ["dotnet"],
+            SdlcRoles = ["PG_BE", "QA"],
+            Mode = "Compact"
+        };
+
+        var result = service.Recommend(request, components);
+
+        var types = result.AdditionalCandidates.Select(c => c.ComponentType).ToList();
+        Assert.Equal(
+            [ComponentType.Agent, ComponentType.Rule, ComponentType.Rule, ComponentType.Skill, ComponentType.Command],
+            types);
+        Assert.Equal("be-agent-4-extra", result.AdditionalCandidates[0].Name);
+        Assert.Equal("qa-rule-high", result.AdditionalCandidates[1].Name);
+        Assert.Equal("qa-rule-low", result.AdditionalCandidates[2].Name);
+    }
+
+    [Fact]
+    public async Task Recommend_GameEcsLuauGreenfieldCompact_PrioritizesRobloxAgentsAndCoversAllMajorSdlcRoles()
+    {
+        using var dbScope = new TestDbContextScope();
+        await BuiltInEccSeeder.SeedAsync(dbScope.Context);
+
+        // 加入競爭用的通用/他引擎 Agent，驗證不會壓過 Roblox/Luau 專屬 Lead Agent
+        dbScope.Context.EccComponents.AddRange(
+            new EccComponent
+            {
+                ComponentType = ComponentType.Agent,
+                Name = "gan-architect",
+                Path = "agents/gan-architect.md",
+                SdlcRoles = "SA,SD,PG_BE",
+                TechStacks = "common",
+                ArchStyles = "general",
+                DescriptionEn = "General GAN architecture agent",
+                SummaryZh = "通用架構代理",
+                IsActive = true
+            },
+            new EccComponent
+            {
+                ComponentType = ComponentType.Agent,
+                Name = "gdscript-reviewer",
+                Path = "agents/gdscript-reviewer.md",
+                SdlcRoles = "PG_FE,PG_BE,PG_TEST,QA",
+                TechStacks = "gdscript",
+                ArchStyles = "general",
+                DescriptionEn = "Godot GDScript code reviewer",
+                SummaryZh = "Godot 審查代理",
+                IsActive = true
+            });
+        await dbScope.Context.SaveChangesAsync();
+
+        var allComponents = await dbScope.Context.EccComponents.AsNoTracking().ToListAsync();
+        var service = new RecommendationService(dbScope.Context);
+
+        var request = new WizardRequestViewModel
+        {
+            ProjectType = "Game",
+            ArchStyle = "ECS",
+            TechStacks = ["luau"],
+            SdlcRoles = ["SA", "SD", "PG_FE", "PG_BE", "PG_DB", "PG_TEST", "QA"],
+            ProjectLifecycle = "Greenfield",
+            Mode = "Compact"
+        };
+
+        var result = service.Recommend(request, allComponents);
+
+        var leadNames = result.Suites.Select(s => s.LeadAgent.Name).ToList();
+        Assert.Contains("roblox-luau-architect", leadNames);
+        Assert.Contains("roblox-luau-reviewer", leadNames);
+        Assert.DoesNotContain("gdscript-reviewer", leadNames);
+
+        var architectLead = result.Suites.Single(s => s.LeadAgent.Name == "roblox-luau-architect").LeadAgent;
+        var reviewerLead = result.Suites.Single(s => s.LeadAgent.Name == "roblox-luau-reviewer").LeadAgent;
+        var ganSuite = result.Suites.FirstOrDefault(s => s.LeadAgent.Name.StartsWith("gan-", StringComparison.OrdinalIgnoreCase));
+        if (ganSuite is not null)
+        {
+            Assert.True(architectLead.Score > ganSuite.LeadAgent.Score);
+            Assert.True(reviewerLead.Score > ganSuite.LeadAgent.Score);
+        }
+
+        foreach (var role in request.SdlcRoles)
+        {
+            var group = result.Groups.Single(g => g.Role == role);
+            Assert.Contains(group.Items, item => item.Path.StartsWith("builtin/roblox/", StringComparison.OrdinalIgnoreCase));
+        }
     }
 }

@@ -1,0 +1,549 @@
+/* ==========================================================================
+   ECCSELECTION v1.6 — 3D Iconography & Tactile Spatial UI System
+   Pure CSS 3D Transform + Isometric SVG Pedestals (Offline & MVC Native)
+   ========================================================================== */
+
+:root {
+    --i3d-agent: #4f46e5;
+    --i3d-agent-light: #818cf8;
+    --i3d-skill: #10b981;
+    --i3d-skill-light: #34d399;
+    --i3d-rule: #f59e0b;
+    --i3d-rule-light: #fbbf24;
+    --i3d-command: #06b6d4;
+    --i3d-command-light: #22d3ee;
+    --i3d-danger: #ef4444;
+    --i3d-slate: #64748b;
+    --i3d-surface: #ffffff;
+    --i3d-bg-depth: #f1f5f9;
+    --i3d-border: #e2e8f0;
+}
+
+body.i3d-body {
+    background: radial-gradient(circle at 15% 10%, #eef2ff 0%, #f8fafc 45%, #f1f5f9 100%);
+    min-height: 100vh;
+}
+
+/* --------------------------------------------------------------------------
+   1. 3D SVG Icon Containers & Sizes
+   -------------------------------------------------------------------------- */
+.i3d-stage {
+    perspective: 900px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.i3d-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transform-style: preserve-3d;
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), filter 0.28s ease;
+    filter: drop-shadow(0 6px 10px rgba(15, 23, 42, 0.14));
+    flex-shrink: 0;
+}
+
+.i3d-icon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+}
+
+.i3d-xs { width: 20px; height: 20px; }
+.i3d-sm { width: 28px; height: 28px; }
+.i3d-md { width: 40px; height: 40px; }
+.i3d-lg { width: 56px; height: 56px; }
+.i3d-xl { width: 76px; height: 76px; }
+
+.i3d-hover-tilt:hover .i3d-icon,
+.i3d-icon.i3d-interactive:hover {
+    transform: translateY(-4px) rotateX(8deg) rotateY(-8deg) scale(1.07);
+    filter: drop-shadow(0 12px 18px rgba(79, 70, 229, 0.22));
+}
+
+.i3d-float {
+    animation: i3dLevitate 3.6s ease-in-out infinite;
+}
+
+.i3d-spin-slow {
+    animation: i3dOrbitSpin 4s linear infinite;
+}
+
+@keyframes i3dLevitate {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-5px); }
+}
+
+@keyframes i3dOrbitSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes i3dPulseRing {
+    0% { transform: scale(0.95); opacity: 0.75; }
+    70% { transform: scale(1.18); opacity: 0; }
+    100% { transform: scale(1.18); opacity: 0; }
+}
+
+/* --------------------------------------------------------------------------
+   2. Navbar 3D Badges
+   -------------------------------------------------------------------------- */
+.i3d-navbar {
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 60%, #0f172a 100%) !important;
+    border-bottom: 1px solid rgba(129, 140, 248, 0.25);
+}
+
+.i3d-nav-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.4rem 0.75rem !important;
+    border-radius: 0.65rem;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.i3d-nav-pill:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    transform: translateY(-1px);
+}
+
+/* --------------------------------------------------------------------------
+   3. Home Dashboard — 3D Isometric Count Pillars & Telemetry Pods
+   -------------------------------------------------------------------------- */
+.i3d-hero-panel {
+    background: linear-gradient(135deg, #ffffff 0%, #f8faff 65%, #eef2ff 100%);
+    border: 1px solid rgba(99, 102, 241, 0.16);
+    box-shadow: 0 14px 35px rgba(15, 23, 42, 0.06), 0 4px 0 #e2e8f0;
+    border-radius: 1.15rem;
+}
+
+.i3d-pillar-card {
+    position: relative;
+    background: linear-gradient(160deg, #ffffff 0%, #f8fafc 100%);
+    border: 1px solid var(--i3d-border);
+    border-radius: 1rem;
+    padding: 1.25rem;
+    box-shadow: 0 6px 0 #cbd5e1, 0 14px 28px rgba(15, 23, 42, 0.07);
+    transform-style: preserve-3d;
+    transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.26s ease;
+    height: 100%;
+    overflow: hidden;
+}
+
+.i3d-pillar-card:hover {
+    transform: translateY(-6px) rotateX(4deg) rotateY(-3deg);
+    box-shadow: 0 10px 0 #94a3b8, 0 22px 36px rgba(15, 23, 42, 0.12);
+}
+
+.i3d-pillar-accent-agent { border-top: 4px solid var(--i3d-agent); }
+.i3d-pillar-accent-skill { border-top: 4px solid var(--i3d-skill); }
+.i3d-pillar-accent-rule { border-top: 4px solid var(--i3d-rule); }
+.i3d-pillar-accent-command { border-top: 4px solid var(--i3d-command); }
+
+.i3d-pillar-bar-track {
+    height: 10px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+    box-shadow: inset 0 2px 3px rgba(15, 23, 42, 0.12);
+}
+
+.i3d-pillar-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.35);
+}
+
+.i3d-pod {
+    position: relative;
+    background: #ffffff;
+    border: 1px solid var(--i3d-border);
+    border-radius: 0.95rem;
+    padding: 1rem 1.15rem;
+    box-shadow: 0 4px 0 #e2e8f0, 0 8px 18px rgba(15, 23, 42, 0.05);
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    height: 100%;
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+.i3d-pod:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 0 #cbd5e1, 0 14px 24px rgba(15, 23, 42, 0.08);
+}
+
+.i3d-pod-pulse {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.i3d-pod-pulse.is-online::before {
+    content: "";
+    position: absolute;
+    inset: -5px;
+    border-radius: 50%;
+    border: 2px solid #10b981;
+    animation: i3dPulseRing 2.2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+}
+
+/* --------------------------------------------------------------------------
+   4. 3D Score Gauge (Energy Meter)
+   -------------------------------------------------------------------------- */
+.i3d-score-gauge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.28rem 0.55rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.65rem;
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.i3d-gauge-cells {
+    display: inline-flex;
+    gap: 3px;
+    align-items: center;
+}
+
+.i3d-gauge-cell {
+    width: 7px;
+    height: 14px;
+    border-radius: 2px;
+    background: #e2e8f0;
+    box-shadow: inset 0 -2px 0 rgba(15, 23, 42, 0.12);
+    transition: background-color 0.2s ease;
+}
+
+.i3d-score-high .i3d-gauge-cell.is-lit {
+    background: linear-gradient(180deg, #34d399 0%, #059669 100%);
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.i3d-score-mid .i3d-gauge-cell.is-lit {
+    background: linear-gradient(180deg, #818cf8 0%, #4f46e5 100%);
+    box-shadow: 0 0 6px rgba(99, 102, 241, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.i3d-score-low .i3d-gauge-cell.is-lit {
+    background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.i3d-score-num {
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    min-width: 1.6rem;
+    text-align: right;
+}
+
+/* --------------------------------------------------------------------------
+   5. Catalog & Result — 3D Component Tile Grid & Brick Cards
+   -------------------------------------------------------------------------- */
+.i3d-tile-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+    gap: 1.1rem;
+}
+
+.i3d-component-card {
+    position: relative;
+    background: #ffffff;
+    border: 1px solid var(--i3d-border);
+    border-radius: 1rem;
+    padding: 1rem 1.1rem;
+    box-shadow: 0 5px 0 #cbd5e1, 0 10px 22px rgba(15, 23, 42, 0.06);
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.i3d-component-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 0 #94a3b8, 0 16px 28px rgba(15, 23, 42, 0.1);
+}
+
+.i3d-component-card.i3d-type-agent { border-top: 4px solid var(--i3d-agent); }
+.i3d-component-card.i3d-type-skill { border-top: 4px solid var(--i3d-skill); }
+.i3d-component-card.i3d-type-rule { border-top: 4px solid var(--i3d-rule); }
+.i3d-component-card.i3d-type-command { border-top: 4px solid var(--i3d-command); }
+
+.i3d-component-card.i3d-card-inactive {
+    background: #f8fafc;
+    opacity: 0.78;
+    border-style: dashed;
+}
+
+.i3d-component-card.is-checked {
+    border-color: rgba(79, 70, 229, 0.45);
+    box-shadow: 0 5px 0 #a5b4fc, 0 12px 24px rgba(79, 70, 229, 0.1);
+}
+
+.i3d-summary-clamp {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 0.85rem;
+    color: #475569;
+    line-height: 1.45;
+}
+
+.i3d-capsule-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+}
+
+.i3d-micro-capsule {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: #334155;
+    box-shadow: 0 1px 0 #cbd5e1;
+}
+
+.i3d-detail-drawer {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    padding: 0.75rem;
+    font-size: 0.8rem;
+}
+
+/* --------------------------------------------------------------------------
+   6. Sync Timeline — 3D Cards & 4 Mini Count Pillars
+   -------------------------------------------------------------------------- */
+.i3d-timeline {
+    position: relative;
+    padding-left: 2.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.i3d-timeline::before {
+    content: "";
+    position: absolute;
+    left: 14px;
+    top: 8px;
+    bottom: 8px;
+    width: 4px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #6366f1 0%, #06b6d4 50%, #cbd5e1 100%);
+}
+
+.i3d-timeline-item {
+    position: relative;
+    background: #ffffff;
+    border: 1px solid var(--i3d-border);
+    border-radius: 1rem;
+    padding: 1rem 1.2rem;
+    box-shadow: 0 4px 0 #cbd5e1, 0 8px 18px rgba(15, 23, 42, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.i3d-timeline-item:hover {
+    transform: translateX(4px);
+    box-shadow: 0 5px 0 #94a3b8, 0 12px 24px rgba(15, 23, 42, 0.09);
+}
+
+.i3d-timeline-node {
+    position: absolute;
+    left: -2.25rem;
+    top: 1.05rem;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 3px 8px rgba(15, 23, 42, 0.16);
+}
+
+.i3d-mini-pillars {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.65rem;
+}
+
+.i3d-mini-pillar-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 52px;
+    padding: 0.35rem 0.45rem;
+    border-radius: 0.6rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 0 #cbd5e1;
+}
+
+.i3d-mini-bar {
+    width: 18px;
+    min-height: 6px;
+    max-height: 32px;
+    border-radius: 4px 4px 2px 2px;
+    box-shadow: 3px 0 0 rgba(15, 23, 42, 0.14);
+    margin-bottom: 0.25rem;
+}
+
+.i3d-error-capsule {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.28rem 0.65rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+    box-shadow: 0 3px 0 #f87171;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+   7. Wizard — 3D Tactile Selector Tiles
+   -------------------------------------------------------------------------- */
+.i3d-selector-tile {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.75rem 0.85rem;
+    border-radius: 0.85rem;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    border: 1.5px solid #cbd5e1;
+    box-shadow: 0 5px 0 #cbd5e1, 0 8px 16px rgba(15, 23, 42, 0.06);
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+    height: 100%;
+}
+
+.i3d-selector-tile:hover:not(.is-disabled):not(.opacity-50) {
+    transform: translateY(-3px);
+    border-color: #818cf8;
+    box-shadow: 0 7px 0 #a5b4fc, 0 12px 22px rgba(79, 70, 229, 0.14);
+}
+
+.i3d-selector-tile.is-selected {
+    background: linear-gradient(160deg, #eef2ff 0%, #e0e7ff 100%);
+    border-color: #4f46e5;
+    box-shadow: 0 4px 0 #4f46e5, 0 10px 22px rgba(79, 70, 229, 0.22);
+    transform: translateY(-2px);
+}
+
+.i3d-selector-tile.is-disabled,
+.i3d-selector-tile.opacity-50 {
+    background: #f1f5f9;
+    border-color: #e2e8f0;
+    box-shadow: inset 0 2px 4px rgba(15, 23, 42, 0.08);
+    transform: translateY(2px);
+    filter: grayscale(0.85);
+    cursor: not-allowed;
+}
+
+.i3d-tile-title {
+    font-weight: 700;
+    font-size: 0.86rem;
+    color: #0f172a;
+    line-height: 1.25;
+}
+
+.i3d-tile-sub {
+    font-size: 0.74rem;
+    color: #64748b;
+    line-height: 1.25;
+}
+
+/* --------------------------------------------------------------------------
+   8. Wizard Result — Lead Agent Mainframe Core & Playbook 3D Flow
+   -------------------------------------------------------------------------- */
+.i3d-lead-card {
+    background: linear-gradient(135deg, #ffffff 0%, #f5f7ff 100%);
+    border: 1.5px solid rgba(79, 70, 229, 0.35);
+    border-radius: 1.1rem;
+    box-shadow: 0 7px 0 #c7d2fe, 0 16px 32px rgba(79, 70, 229, 0.1);
+    overflow: hidden;
+}
+
+.i3d-lead-header {
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+    color: #ffffff;
+    padding: 1.15rem 1.3rem;
+}
+
+.i3d-playbook-flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.i3d-flow-node {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.32rem 0.62rem;
+    border-radius: 0.65rem;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    box-shadow: 0 3px 0 #cbd5e1;
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.i3d-flow-arrow {
+    color: #6366f1;
+    font-weight: 700;
+}
+
+/* --------------------------------------------------------------------------
+   9. Accessibility — Reduced Motion
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+    .i3d-icon,
+    .i3d-pillar-card,
+    .i3d-pod,
+    .i3d-component-card,
+    .i3d-timeline-item,
+    .i3d-selector-tile,
+    .i3d-nav-pill {
+        transition: none !important;
+        animation: none !important;
+    }
+
+    .i3d-float,
+    .i3d-spin-slow,
+    .i3d-pod-pulse.is-online::before {
+        animation: none !important;
+    }
+
+    .i3d-hover-tilt:hover .i3d-icon,
+    .i3d-icon.i3d-interactive:hover,
+    .i3d-pillar-card:hover,
+    .i3d-pod:hover,
+    .i3d-component-card:hover,
+    .i3d-timeline-item:hover,
+    .i3d-selector-tile:hover:not(.is-disabled):not(.opacity-50) {
+        transform: none !important;
+    }
+}

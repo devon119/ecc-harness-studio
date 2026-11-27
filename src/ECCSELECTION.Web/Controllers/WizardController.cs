@@ -1,10 +1,8 @@
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using ECCSELECTION.Web.Services;
 using ECCSELECTION.Web.Services.Interfaces;
 using ECCSELECTION.Web.ViewModels;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ECCSELECTION.Web.Controllers;
@@ -16,22 +14,19 @@ public partial class WizardController : Controller
     private readonly IHarnessBundleService _harnessBundleService;
     private readonly IRequirementAnalyzerService _requirementAnalyzerService;
     private readonly IGeminiCurationService _geminiCurationService;
-    private readonly IWebHostEnvironment _environment;
 
     public WizardController(
         IRecommendationService recommendationService,
         IMarkdownExportService markdownExportService,
         IHarnessBundleService harnessBundleService,
         IRequirementAnalyzerService requirementAnalyzerService,
-        IGeminiCurationService geminiCurationService,
-        IWebHostEnvironment environment)
+        IGeminiCurationService geminiCurationService)
     {
         _recommendationService = recommendationService;
         _markdownExportService = markdownExportService;
         _harnessBundleService = harnessBundleService;
         _requirementAnalyzerService = requirementAnalyzerService;
         _geminiCurationService = geminiCurationService;
-        _environment = environment;
     }
 
     [HttpGet]
@@ -53,28 +48,20 @@ public partial class WizardController : Controller
             return BadRequest(new { success = false, message = "請輸入有效的 Gemini API Key。" });
         }
 
-        var selectedModel = string.IsNullOrWhiteSpace(model) ? "gemini-2.5-flash" : model.Trim();
-        var localConfigPath = Path.Combine(_environment.ContentRootPath, "appsettings.Development.local.json");
-
-        var payload = new
+        try
         {
-            LlmEnrichment = new
+            var selectedModel = await _geminiCurationService.SaveLocalGeminiKeyAsync(apiKey, model, cancellationToken);
+            return Json(new
             {
-                Enabled = true,
-                Endpoint = "https://generativelanguage.googleapis.com/v1beta",
-                ApiKey = apiKey.Trim(),
-                Model = selectedModel
-            }
-        };
-
-        var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
-        await System.IO.File.WriteAllTextAsync(localConfigPath, json, Encoding.UTF8, cancellationToken);
-
-        return Json(new
+                success = true,
+                message = $"已安全儲存至本機 appsettings.Development.local.json（模型：{selectedModel}，已排除於 Git 版控之外）。"
+            });
+        }
+        catch (ArgumentException ex)
         {
-            success = true,
-            message = $"已安全儲存至本機 appsettings.Development.local.json（模型：{selectedModel}，已排除於 Git 版控之外）。"
-        });
+            TempData["Error"] = ex.Message;
+            return BadRequest(new { success = false, message = ex.Message });
+        }
     }
 
     [HttpPost]
@@ -124,11 +111,11 @@ public partial class WizardController : Controller
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            ApplySuggestedAssemblyDefaults(request, analysis);
+            _requirementAnalyzerService.ApplySuggestedAssemblyDefaults(request, analysis);
         }
         else
         {
-            ApplySuggestedAssemblyDefaults(request, null);
+            _requirementAnalyzerService.ApplySuggestedAssemblyDefaults(request, null);
         }
 
         if (!ValidateCompatibility(request))
@@ -156,13 +143,7 @@ public partial class WizardController : Controller
         }
 
         var result = await _recommendationService.RecommendAsync(request, cancellationToken);
-        result.IsGeminiApiConfigured = _geminiCurationService.IsApiConfigured;
-        result.ChromeGeminiPrompt = (await _geminiCurationService.CurateAsync(
-            await _recommendationService.RecommendAsync(request, cancellationToken),
-            cancellationToken)).ChromeGeminiPrompt;
-        result.HarnessPlaybookMarkdown = GeminiCurationService.BuildDeterministicPlaybook(result);
-
-        if (!_geminiCurationService.TryApplyExternalCurationJson(result, geminiResponseJson ?? string.Empty, out var errorMessage))
+        if (!_geminiCurationService.ApplyExternalCuration(result, geminiResponseJson, out var errorMessage))
         {
             TempData["GeminiCurationError"] = errorMessage ?? "無法套用 Gemini 回覆結果。";
         }
@@ -218,45 +199,6 @@ public partial class WizardController : Controller
         }
 
         return File(zipBytes, "application/zip", $"{safeSlug}-harness-bundle.zip");
-    }
-
-    private static void ApplySuggestedAssemblyDefaults(
-        WizardRequestViewModel request,
-        RequirementAnalysisResult? analysis)
-    {
-        var defaults = new HarnessAssemblyOptionsViewModel();
-        var inferred = RequirementAnalyzerService.InferEngineeringCommands(request.ProjectType, request.TechStacks);
-
-        if (string.Equals(request.AssemblyOptions.ProjectName, defaults.ProjectName, StringComparison.Ordinal) &&
-            !string.IsNullOrWhiteSpace(analysis?.SuggestedProjectName))
-        {
-            request.AssemblyOptions.ProjectName = analysis.SuggestedProjectName;
-        }
-
-        if (string.Equals(request.AssemblyOptions.TargetEnvironment, defaults.TargetEnvironment, StringComparison.Ordinal))
-        {
-            request.AssemblyOptions.TargetEnvironment = analysis?.SuggestedTargetEnvironment ?? inferred.TargetEnvironment;
-        }
-
-        if (string.Equals(request.AssemblyOptions.BuildCommand, defaults.BuildCommand, StringComparison.Ordinal))
-        {
-            request.AssemblyOptions.BuildCommand = analysis?.SuggestedBuildCommand ?? inferred.BuildCommand;
-        }
-
-        if (string.Equals(request.AssemblyOptions.FormatCommand, defaults.FormatCommand, StringComparison.Ordinal))
-        {
-            request.AssemblyOptions.FormatCommand = analysis?.SuggestedFormatCommand ?? inferred.FormatCommand;
-        }
-
-        if (string.Equals(request.AssemblyOptions.TestCommand, defaults.TestCommand, StringComparison.Ordinal))
-        {
-            request.AssemblyOptions.TestCommand = analysis?.SuggestedTestCommand ?? inferred.TestCommand;
-        }
-
-        if (string.Equals(request.AssemblyOptions.SecurityScanCommand, defaults.SecurityScanCommand, StringComparison.Ordinal))
-        {
-            request.AssemblyOptions.SecurityScanCommand = analysis?.SuggestedSecurityScanCommand ?? inferred.SecurityScanCommand;
-        }
     }
 
     private bool ValidateCompatibility(WizardRequestViewModel request)

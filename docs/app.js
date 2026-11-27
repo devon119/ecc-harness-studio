@@ -30,6 +30,7 @@
     let catalog = [];
     let extractedKeywords = [];
     let currentResult = null;
+    let iconSeq = 0;
 
     const $ = (id) => document.getElementById(id);
     const splitTokens = (v) => (v || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
@@ -39,22 +40,177 @@
         return String(str || "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[m]));
     }
 
+    function renderIcon3D(kind, size = "md", label = "") {
+        const k = String(kind || "Agent").trim().toLowerCase();
+        const sz = ["xs", "sm", "md", "lg", "xl"].includes(size) ? `i3d-${size}` : "i3d-md";
+        const uid = `g${++iconSeq}`;
+        const aria = escapeHtml(label || `${kind} 3D 圖示`);
+        let svg = "";
+
+        if (k === "agent") {
+            svg = `<svg viewBox="0 0 64 64" fill="none"><defs>
+                <linearGradient id="agT-${uid}" x1="12" y1="8" x2="52" y2="28" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#a5b4fc"/><stop offset="100%" stop-color="#6366f1"/></linearGradient>
+                <linearGradient id="agL-${uid}" x1="10" y1="20" x2="32" y2="56" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#4f46e5"/><stop offset="100%" stop-color="#312e81"/></linearGradient>
+                <linearGradient id="agR-${uid}" x1="32" y1="20" x2="54" y2="56" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#818cf8"/><stop offset="100%" stop-color="#4338ca"/></linearGradient>
+            </defs><polygon points="32,6 54,18 32,30 10,18" fill="url(#agT-${uid})"/><polygon points="10,18 32,30 32,56 10,44" fill="url(#agL-${uid})"/><polygon points="54,18 32,30 32,56 54,44" fill="url(#agR-${uid})"/><circle cx="32" cy="18" r="5" fill="#eef2ff"/><path d="M32 30V43M21 24L32 30L43 24" stroke="#c7d2fe" stroke-width="2" stroke-linecap="round"/><circle cx="32" cy="43" r="3" fill="#38bdf8"/></svg>`;
+        } else if (k === "skill") {
+            svg = `<svg viewBox="0 0 64 64" fill="none"><defs>
+                <linearGradient id="skT-${uid}" x1="14" y1="8" x2="50" y2="28" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#6ee7b7"/><stop offset="100%" stop-color="#10b981"/></linearGradient>
+                <linearGradient id="skL-${uid}" x1="12" y1="20" x2="32" y2="56" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#059669"/><stop offset="100%" stop-color="#064e3b"/></linearGradient>
+                <linearGradient id="skR-${uid}" x1="32" y1="20" x2="52" y2="56" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#34d399"/><stop offset="100%" stop-color="#047857"/></linearGradient>
+            </defs><polygon points="32,7 52,19 32,31 12,19" fill="url(#skT-${uid})"/><polygon points="12,19 32,31 32,56 12,44" fill="url(#skL-${uid})"/><polygon points="52,19 32,31 32,56 52,44" fill="url(#skR-${uid})"/><circle cx="32" cy="19" r="5.5" stroke="#ecfdf5" stroke-width="2.4"/><path d="M22 36L28 40L22 44M42 36L36 40L42 44" stroke="#a7f3d0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+        } else if (k === "rule" || k === "gate") {
+            svg = `<svg viewBox="0 0 64 64" fill="none"><defs>
+                <linearGradient id="rlF-${uid}" x1="14" y1="8" x2="50" y2="56" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#fde68a"/><stop offset="50%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#b45309"/></linearGradient>
+            </defs><path d="M32 7L53 15V31C53 44 43 53 32 58C21 53 11 44 11 31V15L32 7Z" fill="#92400e" transform="translate(2,2)" opacity="0.4"/><path d="M32 6L52 14V30C52 43 42 52 32 57C22 52 12 43 12 30V14L32 6Z" fill="url(#rlF-${uid})"/><path d="M24 31L30 37L41 24" stroke="#fffbeb" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+        } else if (k === "command") {
+            svg = `<svg viewBox="0 0 64 64" fill="none"><rect x="8" y="18" width="48" height="36" rx="10" fill="#164e63"/><rect x="12" y="11" width="40" height="33" rx="8" fill="#06b6d4"/><path d="M22 23L28 28L22 33M31 33H41" stroke="#083344" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+        } else if (k === "success") {
+            svg = `<svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="24" fill="#10b981"/><ellipse cx="24" cy="20" rx="8" ry="4" transform="rotate(-25 24 20)" fill="#ffffff" opacity="0.45"/><path d="M22 33L29 40L43 25" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+        } else if (k === "lock") {
+            svg = `<svg viewBox="0 0 64 64" fill="none"><path d="M22 27V20C22 14.5 26.5 10 32 10C37.5 10 42 14.5 42 20V27" stroke="#d97706" stroke-width="5" stroke-linecap="round"/><rect x="15" y="26" width="34" height="28" rx="7" fill="#f59e0b"/><circle cx="32" cy="39" r="3.5" fill="#78350f"/><path d="M32 42V47" stroke="#78350f" stroke-width="3" stroke-linecap="round"/></svg>`;
+        } else if (k === "llm") {
+            svg = `<svg viewBox="0 0 64 64" fill="none"><path d="M24 14C17 14 12 19 12 26C10 29 10 35 14 39C14 46 20 51 27 51H30V14H24Z" fill="#7c3aed"/><path d="M40 14C47 14 52 19 52 26C54 29 54 35 50 39C50 46 44 51 37 51H34V14H40Z" fill="#6366f1"/><circle cx="23" cy="28" r="2.5" fill="#ecfeff"/><circle cx="41" cy="28" r="2.5" fill="#ecfeff"/><circle cx="32" cy="38" r="3" fill="#38bdf8"/></svg>`;
+        } else if (["sqlserver", "sqlite", "postgres", "mysql", "pg_db"].includes(k)) {
+            const top = { sqlserver: "#f87171", postgres: "#60a5fa", mysql: "#fbbf24", pg_db: "#a78bfa" }[k] || "#38bdf8";
+            const body = { sqlserver: "#b91c1c", postgres: "#1d4ed8", mysql: "#d97706", pg_db: "#6d28d9" }[k] || "#0284c7";
+            svg = `<svg viewBox="0 0 64 64" fill="none"><path d="M14 18V46C14 51 22 55 32 55C42 55 50 51 50 46V18H14Z" fill="${body}"/><ellipse cx="32" cy="18" rx="18" ry="8" fill="${top}"/><path d="M14 28C14 33 22 37 32 37C42 37 50 33 50 28" stroke="#ffffff" stroke-opacity="0.45" stroke-width="2"/><path d="M14 38C14 43 22 47 32 47C42 47 50 43 50 38" stroke="#ffffff" stroke-opacity="0.35" stroke-width="2"/></svg>`;
+        } else if (k === "web") {
+            svg = `<svg viewBox="0 0 64 64" fill="none"><rect x="8" y="14" width="48" height="36" rx="7" fill="#312e81" transform="translate(3,3)" opacity="0.4"/><rect x="8" y="12" width="48" height="36" rx="7" fill="#4f46e5"/><rect x="10" y="21" width="44" height="25" rx="4" fill="#eef2ff"/><rect x="15" y="26" width="16" height="14" rx="3" fill="#818cf8"/><rect x="34" y="26" width="15" height="6" rx="2" fill="#cbd5e1"/><rect x="34" y="34" width="15" height="6" rx="2" fill="#cbd5e1"/></svg>`;
+        } else if (k === "mobile") {
+            svg = `<svg viewBox="0 0 64 64" fill="none"><rect x="18" y="7" width="28" height="48" rx="6" fill="#14b8a6"/><rect x="21" y="13" width="22" height="34" rx="3" fill="#f0fdfa"/><circle cx="32" cy="51" r="2" fill="#ccfbf1"/></svg>`;
+        } else if (k === "api") {
+            svg = `<svg viewBox="0 0 64 64" fill="none"><rect x="12" y="12" width="40" height="12" rx="4" fill="#0284c7"/><rect x="12" y="27" width="40" height="12" rx="4" fill="#0369a1"/><rect x="12" y="42" width="40" height="12" rx="4" fill="#0c4a6e"/><circle cx="20" cy="18" r="2.2" fill="#34d399"/><circle cx="20" cy="33" r="2.2" fill="#34d399"/><circle cx="20" cy="48" r="2.2" fill="#38bdf8"/></svg>`;
+        } else if (k === "fullstack") {
+            svg = `<svg viewBox="0 0 64 64" fill="none"><polygon points="32,8 52,18 32,28 12,18" fill="#818cf8"/><polygon points="32,22 52,32 32,42 12,32" fill="#34d399"/><polygon points="32,36 52,46 32,56 12,46" fill="#38bdf8"/></svg>`;
+        } else if (k === "game") {
+            svg = `<svg viewBox="0 0 64 64" fill="none"><rect x="10" y="18" width="44" height="28" rx="12" fill="#7c3aed"/><path d="M22 26V38M16 32H28" stroke="#f5f3ff" stroke-width="3.5" stroke-linecap="round"/><circle cx="41" cy="29" r="3" fill="#fbbf24"/><circle cx="47" cy="35" r="3" fill="#34d399"/></svg>`;
+        } else if (k === "bundle") {
+            svg = `<svg viewBox="0 0 64 64" fill="none"><polygon points="32,8 54,19 32,30 10,19" fill="#93c5fd"/><polygon points="10,19 32,30 32,54 10,43" fill="#3b82f6"/><polygon points="54,19 32,30 32,54 54,43" fill="#1d4ed8"/></svg>`;
+        } else if (k === "playbook") {
+            svg = `<svg viewBox="0 0 64 64" fill="none"><rect x="14" y="10" width="36" height="44" rx="6" fill="#334155"/><rect x="18" y="14" width="28" height="36" rx="4" fill="#f8fafc"/><path d="M24 23H40M24 31H40M24 39H34" stroke="#6366f1" stroke-width="3" stroke-linecap="round"/></svg>`;
+        } else {
+            const fill = {
+                greenfield: "#10b981", brownfield: "#d97706", compact: "#4f46e5", comprehensive: "#059669",
+                dotnet: "#512bd4", kotlin: "#7f52ff", react: "#0ea5e9", vue: "#10b981", python: "#2563eb",
+                go: "#06b6d4", java: "#ea580c", luau: "#3b82f6", godot: "#0284c7", cpp: "#1d4ed8",
+                sa: "#4f46e5", sd: "#0ea5e9", pg_fe: "#10b981", pg_be: "#6366f1", pg_test: "#f59e0b", qa: "#ef4444",
+                mvc: "#4f46e5", clean: "#059669", mvvm: "#0284c7", ecs: "#7c3aed", wizard: "#6366f1"
+            }[k] || "#475569";
+            svg = `<svg viewBox="0 0 64 64" fill="none"><polygon points="32,8 52,19 32,30 12,19" fill="${fill}" fill-opacity="0.72"/><polygon points="12,19 32,30 32,54 12,43" fill="${fill}"/><polygon points="52,19 32,30 32,54 52,43" fill="${fill}" fill-opacity="0.86"/><circle cx="32" cy="19" r="4" fill="#ffffff" fill-opacity="0.85"/></svg>`;
+        }
+
+        return `<span class="i3d-stage" title="${aria}" aria-label="${aria}" role="img"><span class="i3d-icon ${sz}">${svg}</span></span>`;
+    }
+
+    function renderScoreGauge(score) {
+        const cls = score >= 80 ? "i3d-score-high" : score >= 60 ? "i3d-score-mid" : "i3d-score-low";
+        const lit = Math.min(5, Math.max(1, Math.ceil(score / 20)));
+        const cells = Array.from({ length: 5 }, (_, idx) => `<span class="i3d-gauge-cell ${idx < lit ? "is-lit" : ""}"></span>`).join("");
+        return `<div class="i3d-score-gauge ${cls}" title="適配度分數：${score}"><div class="i3d-gauge-cells" aria-hidden="true">${cells}</div><span class="i3d-score-num">${score}</span></div>`;
+    }
+
+    function hydrateStaticIcons() {
+        document.querySelectorAll("[data-icon3d]").forEach(el => {
+            const [kind, size, label] = (el.getAttribute("data-icon3d") || "").split(":");
+            el.innerHTML = renderIcon3D(kind, size || "md", label || kind);
+        });
+    }
+
     function renderCheckboxes() {
         $("techStackCards").innerHTML = TECH_STACKS.map(([slug, label]) => `
             <div class="col-6 col-md-3 col-lg-2">
-                <div class="form-check border rounded p-2 bg-light" data-stack-card="${slug}">
-                    <input class="form-check-input ms-1" type="checkbox" value="${slug}" id="stack_${slug}" ${slug === "dotnet" ? "checked" : ""} />
-                    <label class="form-check-label ms-2 small" for="stack_${slug}">${label}</label>
+                <div class="i3d-selector-tile i3d-checkbox-tile ${slug === "dotnet" ? "is-selected" : ""}" data-stack-card="${slug}">
+                    <input class="form-check-input flex-shrink-0" type="checkbox" value="${slug}" id="stack_${slug}" ${slug === "dotnet" ? "checked" : ""} />
+                    ${renderIcon3D(slug, "xs", `${label} 3D 圖示`)}
+                    <label class="form-check-label small fw-semibold mb-0" for="stack_${slug}">${label}</label>
                 </div>
             </div>`).join("");
 
         $("sdlcRoleCards").innerHTML = SDLC_ROLES.map(([code, label]) => `
             <div class="col-6 col-md-3">
-                <div class="form-check border rounded p-2 bg-light" data-role-card="${code}">
-                    <input class="form-check-input ms-1" type="checkbox" value="${code}" id="role_${code}" ${code !== "PG_FE" ? "checked" : ""} />
-                    <label class="form-check-label ms-2 small" for="role_${code}">${label}</label>
+                <div class="i3d-selector-tile i3d-checkbox-tile ${code !== "PG_FE" ? "is-selected" : ""}" data-role-card="${code}">
+                    <input class="form-check-input flex-shrink-0" type="checkbox" value="${code}" id="role_${code}" ${code !== "PG_FE" ? "checked" : ""} />
+                    ${renderIcon3D(code, "xs", `${label} 3D 圖示`)}
+                    <label class="form-check-label small fw-semibold mb-0" for="role_${code}">${label}</label>
                 </div>
             </div>`).join("");
+    }
+
+    function syncCheckboxTiles() {
+        document.querySelectorAll(".i3d-checkbox-tile").forEach(tile => {
+            const cb = tile.querySelector("input[type='checkbox']");
+            if (!cb) return;
+            tile.classList.toggle("is-selected", cb.checked && !cb.disabled);
+            tile.classList.toggle("is-disabled", cb.disabled);
+        });
+    }
+
+    function syncSelectTiles(selectId) {
+        if (!selectId) return;
+        const select = $(selectId);
+        if (!select) return;
+        const val = select.value;
+        document.querySelectorAll(`[data-select-target="${selectId}"]`).forEach(tile => {
+            const tileVal = tile.getAttribute("data-select-value");
+            const opt = Array.from(select.options).find(o => o.value === tileVal);
+            const disabled = Boolean(opt && opt.disabled);
+            const selected = !disabled && tileVal === val;
+            tile.classList.toggle("is-selected", selected);
+            tile.classList.toggle("is-disabled", disabled);
+            tile.setAttribute("aria-pressed", selected ? "true" : "false");
+            tile.setAttribute("aria-disabled", disabled ? "true" : "false");
+        });
+    }
+
+    function syncAllSelectors() {
+        ["ProjectType", "ProjectLifecycle", "ArchStyle", "Mode"].forEach(syncSelectTiles);
+        syncCheckboxTiles();
+    }
+
+    function initTactileSelectors() {
+        document.addEventListener("click", (e) => {
+            const selTile = e.target.closest("[data-select-target]");
+            if (selTile) {
+                if (selTile.classList.contains("is-disabled")) return;
+                const targetId = selTile.getAttribute("data-select-target");
+                const select = $(targetId);
+                if (!select) return;
+                select.value = selTile.getAttribute("data-select-value") || "";
+                select.dispatchEvent(new Event("change", { bubbles: true }));
+                syncSelectTiles(targetId);
+                return;
+            }
+
+            const chkTile = e.target.closest(".i3d-checkbox-tile");
+            if (chkTile) {
+                const cb = chkTile.querySelector("input[type='checkbox']");
+                if (!cb || cb.disabled) return;
+                if (e.target !== cb && !e.target.closest("label")) {
+                    cb.checked = !cb.checked;
+                    cb.dispatchEvent(new Event("change", { bubbles: true }));
+                }
+                setTimeout(syncCheckboxTiles, 0);
+            }
+        });
+
+        document.addEventListener("keydown", (e) => {
+            if (e.key !== "Enter" && e.key !== " ") return;
+            const selTile = e.target.closest("[data-select-target]");
+            if (selTile) {
+                e.preventDefault();
+                selTile.click();
+            }
+        });
+
+        document.addEventListener("change", (e) => {
+            if (e.target && e.target.matches("select") && e.target.id) {
+                syncSelectTiles(e.target.id);
+            }
+            if (e.target && e.target.matches("input[type='checkbox']")) {
+                syncCheckboxTiles();
+            }
+        });
     }
 
     function applyCompatibility() {
@@ -68,6 +224,7 @@
 
         syncGroup("[data-stack-card]", "data-stack-card", rule.allowedStacks, rule.defaultStacks);
         syncGroup("[data-role-card]", "data-role-card", rule.allowedRoles, rule.allowedRoles);
+        syncAllSelectors();
     }
 
     function syncGroup(selector, attr, allowed, fallback) {
@@ -79,6 +236,7 @@
             const ok = set.has(key);
             cb.disabled = !ok;
             card.classList.toggle("opacity-50", !ok);
+            card.classList.toggle("is-disabled", !ok);
             if (!ok) cb.checked = false;
             else if (cb.checked) anyChecked = true;
         });
@@ -203,11 +361,15 @@
         };
     }
 
+    const GREENFIELD_KW = ["architect", "plan", "planner", "tdd", "gan-planner", "gan-generator", "database-reviewer", "api-design", "scaffold", "greenfield", "spec"];
+    const BROWNFIELD_KW = ["explore", "code-explorer", "spec-miner", "refactor", "cleaner", "silent-failure", "harness-optimizer", "review", "security", "audit", "e2e", "coverage", "legacy", "migration", "brownfield"];
+
     function recommendDeterministic(state) {
         const isCompact = state.mode !== "Comprehensive";
         const minScore = isCompact ? 50 : 40;
         const selectedStacks = new Set(state.stacks.map(s => s.toLowerCase()));
         const selectedArch = state.archStyle.toLowerCase();
+        const isGameLuau = state.projectType === "Game" && selectedStacks.has("luau");
 
         const evaluate = (comp, role) => {
             const cRoles = splitTokens(comp.SdlcRoles);
@@ -229,6 +391,32 @@
             const cArch = splitTokens(comp.ArchStyles);
             if (cArch.includes(selectedArch)) { score += 15; reasons.push(`符合架構：${state.archStyle} (+15)`); }
             else if (cArch.includes("general")) { score += 5; }
+
+            const text = `${comp.Name} ${comp.Path} ${comp.DescriptionEn}`.toLowerCase();
+            if (state.lifecycle === "Brownfield") {
+                if (BROWNFIELD_KW.some(k => text.includes(k))) {
+                    score += 20;
+                    reasons.push("適用舊專案導入與重構（Brownfield） (+20)");
+                }
+            } else if (GREENFIELD_KW.some(k => text.includes(k))) {
+                score += 20;
+                reasons.push("適用新專案從零建置（Greenfield） (+20)");
+            }
+
+            if (state.projectType === "Game") {
+                const isRobloxLuau = cStacks.includes("luau") || cArch.includes("ecs") || text.includes("roblox") || text.includes("luau");
+                if (isGameLuau && isRobloxLuau) {
+                    score += 20;
+                    reasons.push("符合 Game / Roblox Luau 開發特性 (+20)");
+                } else if (cStacks.includes("godot") || cStacks.includes("cpp") || text.includes("godot") || text.includes("gdscript") || text.includes("game") || isRobloxLuau) {
+                    score += 15;
+                    reasons.push("符合 Game 遊戲開發型態特性 (+15)");
+                } else if (comp.Name.toLowerCase().startsWith("gan-")) {
+                    const ganBonus = isGameLuau ? 5 : 15;
+                    score += ganBonus;
+                    reasons.push(`符合 Game 生成式輔助 (+${ganBonus})`);
+                }
+            }
 
             const searchable = `${comp.Name} ${comp.DescriptionEn} ${comp.SummaryZh} ${comp.UsageGuide}`.toLowerCase();
             const kwHit = state.keywords.filter(k => searchable.includes(k));
@@ -282,6 +470,12 @@
                 if (overlap.length > 0) { ps += Math.min(overlap.length * 15, 35); pr.push(`共同涵蓋角色 (${overlap.join(", ")})`); }
                 if (matched.length > 0) { ps += Math.min(matched.length * 20, 40); pr.push(`符合技術棧 (${matched.join(", ")})`); }
                 else if (hasCommon) { ps += 15; pr.push("通用規範"); }
+                const cArch = splitTokens(cand.ArchStyles);
+                if (cArch.includes(selectedArch)) { ps += 15; pr.push(`符合架構 (${state.archStyle})`); }
+                if (isGameLuau && (matched.includes("luau") || cArch.includes("ecs") || cand.Name.toLowerCase().includes("roblox") || cand.Name.toLowerCase().includes("luau"))) {
+                    ps += 15;
+                    pr.push("Roblox / Luau 套件加權");
+                }
                 if (aTokens.some(t => cand.Name.toLowerCase().includes(t) || cand.Path.toLowerCase().includes(t))) {
                     ps += 35; pr.push(`與 ${agentEv.comp.Name} 領域互補`);
                 }
@@ -385,65 +579,109 @@
         res.curationSource = sourceLabel;
     }
 
+    function renderModuleBrick(item, checked, drawerId) {
+        const comp = item.comp;
+        const typeName = normType(comp.ComponentType);
+        const typeLower = typeName.toLowerCase();
+        const reasons = item.reasons || [];
+        const summary = comp.UsageGuide || comp.SummaryZh || comp.DescriptionEn || "";
+        const capsules = reasons.slice(0, 2).map(r => `<span class="i3d-micro-capsule" title="${escapeHtml(r)}">${escapeHtml(r)}</span>`).join("");
+        const extraCapsule = reasons.length > 2 ? `<span class="i3d-micro-capsule text-muted">+${reasons.length - 2}</span>` : "";
+
+        return `
+        <article class="i3d-component-card i3d-type-${typeLower} ${checked ? "is-checked" : ""} i3d-hover-tilt">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+                <div class="d-flex align-items-center gap-2 min-w-0">
+                    <input type="checkbox" class="form-check-input comp-chk flex-shrink-0" value="${comp.Id}" ${checked ? "checked" : ""} aria-label="選取 ${escapeHtml(comp.Name)}" />
+                    ${renderIcon3D(typeName, "sm", `${typeName}：${comp.Name}`)}
+                    <div class="min-w-0">
+                        <div class="fw-bold text-dark text-truncate" title="${escapeHtml(comp.Name)}">${escapeHtml(comp.Name)}</div>
+                        <span class="badge bg-light text-dark border small">${escapeHtml(typeName)}</span>
+                    </div>
+                </div>
+                ${renderScoreGauge(item.score)}
+            </div>
+            <div class="i3d-summary-clamp" title="${escapeHtml(summary)}">${escapeHtml(summary)}</div>
+            <div class="i3d-capsule-row">${capsules}${extraCapsule}</div>
+            <div id="${drawerId}" class="i3d-detail-drawer d-none" data-i3d-drawer>
+                <div class="mb-1"><strong>說明：</strong>${escapeHtml(summary)}</div>
+                <div class="mb-1"><strong>路徑：</strong><code>${escapeHtml(comp.Path)}</code></div>
+                <div><strong>推薦理由：</strong>${escapeHtml(reasons.join("；"))}</div>
+            </div>
+            <div class="mt-auto pt-2 border-top d-flex justify-content-between align-items-center">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-i3d-toggle="${drawerId}" data-label-closed="展開詳情" data-label-open="收合詳情" aria-expanded="false" aria-controls="${drawerId}">
+                    <span data-i3d-toggle-label>展開詳情</span>
+                </button>
+                <a href="${escapeHtml(comp.RawUrl)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">Raw</a>
+            </div>
+        </article>`;
+    }
+
     function renderResult(res) {
         currentResult = res;
         $("resultSection").classList.remove("d-none");
         $("curationSourceBadge").textContent = `精選來源：${res.curationSource}`;
         $("playbookPreview").textContent = res.playbookMarkdown;
 
-        $("suitesContainer").innerHTML = res.suites.map(s => {
+        $("suitesContainer").innerHTML = res.suites.map((s, idx) => {
             const paired = [...s.pairedSkills, ...s.pairedRules, ...s.pairedCommands];
-            const roleBadges = (s.coveredRoles || []).map(r => `<span class="badge bg-primary-subtle text-primary ms-1">${escapeHtml(r)}</span>`).join("");
+            const leadDrawerId = `gh-lead-${idx}-${s.leadAgent.comp.Id}`;
+            const roleBadges = (s.coveredRoles || []).map(r => `
+                <span class="i3d-micro-capsule bg-white text-dark">
+                    <span>${escapeHtml(r)}</span>
+                </span>`).join("");
+
             return `
-            <div class="card shadow-sm border-0 mb-3">
-                <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
-                    <div>
-                        <span class="badge bg-dark me-1">Lead Agent</span>
-                        <strong>${escapeHtml(s.leadAgent.comp.Name)}</strong>
-                        <span class="badge bg-info text-dark ms-1">Score: ${s.leadAgent.score}</span>
-                        <span class="ms-2 small text-muted">適用角色：</span>${roleBadges}
-                        <div class="small text-success mt-1">${escapeHtml(s.leadAgent.reasons.join(" ｜ "))}</div>
+            <section class="i3d-lead-card mb-4">
+                <div class="i3d-lead-header d-flex flex-wrap justify-content-between align-items-start gap-3">
+                    <div class="d-flex align-items-start gap-3">
+                        <div class="i3d-float">${renderIcon3D("Agent", "lg", `Lead Agent：${s.leadAgent.comp.Name}`)}</div>
+                        <div>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                <span class="badge bg-info text-dark">Lead Agent 主機核心</span>
+                                <h3 class="h5 mb-0 fw-bold text-white">${escapeHtml(s.leadAgent.comp.Name)}</h3>
+                                ${renderScoreGauge(s.leadAgent.score)}
+                            </div>
+                            <div class="i3d-capsule-row mt-1">
+                                ${roleBadges}
+                                <button type="button" class="btn btn-sm btn-outline-light py-0 px-2" data-i3d-toggle="${leadDrawerId}" data-label-closed="展開 Agent 詳情" data-label-open="收合 Agent 詳情" aria-expanded="false" aria-controls="${leadDrawerId}">
+                                    <span data-i3d-toggle-label>展開 Agent 詳情</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <label class="small border rounded px-2 py-1 bg-light">
-                        <input type="checkbox" class="form-check-input me-1 comp-chk" value="${s.leadAgent.comp.Id}" checked /> 包含 Agent
-                    </label>
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="form-check-label small rounded px-2 py-1 bg-white text-dark fw-semibold d-inline-flex align-items-center gap-1">
+                            <input type="checkbox" class="form-check-input me-1 comp-chk" value="${s.leadAgent.comp.Id}" checked />
+                            <span>包含此 Agent</span>
+                        </label>
+                        <a href="${escapeHtml(s.leadAgent.comp.RawUrl)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-light">Raw</a>
+                    </div>
                 </div>
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover align-middle mb-0">
-                        <thead class="table-light"><tr><th style="width:48px">勾選</th><th style="width:90px">類型</th><th>名稱</th><th>理由</th></tr></thead>
-                        <tbody>
-                            ${paired.map(p => `
-                                <tr>
-                                    <td class="text-center"><input type="checkbox" class="form-check-input comp-chk" value="${p.comp.Id}" checked /></td>
-                                    <td><span class="badge bg-secondary">${normType(p.comp.ComponentType)}</span></td>
-                                    <td class="fw-semibold small">${escapeHtml(p.comp.Name)}</td>
-                                    <td class="small text-muted">${escapeHtml(p.reasons.join("、"))}</td>
-                                </tr>`).join("")}
-                        </tbody>
-                    </table>
+                <div id="${leadDrawerId}" class="p-3 bg-white border-bottom d-none small" data-i3d-drawer>
+                    <div class="mb-1"><strong>路徑：</strong><code>${escapeHtml(s.leadAgent.comp.Path)}</code></div>
+                    <div class="text-success"><strong>推薦理由：</strong>${escapeHtml(s.leadAgent.reasons.join(" ｜ "))}</div>
                 </div>
-            </div>`;
+                <div class="p-3">
+                    ${paired.length === 0 ? `<div class="text-muted small">此 Agent 目前無額外配對的 Skill / Rule / Command。</div>` : `
+                        <div class="i3d-tile-grid">
+                            ${paired.map((p, pIdx) => renderModuleBrick(p, true, `gh-pair-${idx}-${pIdx}-${p.comp.Id}`)).join("")}
+                        </div>`}
+                </div>
+            </section>`;
         }).join("");
 
         $("additionalCandidatesContainer").innerHTML = res.additionalCandidates.length === 0 ? "" : `
-            <div class="card shadow-sm border-0 mb-4">
+            <div class="card shadow-sm border-0 rounded-4 mb-4">
                 <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">
                     <span class="fw-bold small">其他候選元件（預設未勾選，共 ${res.additionalCandidates.length} 項，可手動加勾）</span>
-                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#candCollapse">展開 / 收合</button>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#candCollapse">展開 / 收合候選積木</button>
                 </div>
                 <div class="collapse" id="candCollapse">
-                    <div class="table-responsive">
-                        <table class="table table-sm mb-0">
-                            <tbody>
-                                ${res.additionalCandidates.map(c => `
-                                    <tr>
-                                        <td style="width:48px" class="text-center"><input type="checkbox" class="form-check-input comp-chk" value="${c.comp.Id}" /></td>
-                                        <td style="width:90px"><span class="badge bg-secondary">${normType(c.comp.ComponentType)}</span></td>
-                                        <td class="small fw-semibold">${escapeHtml(c.comp.Name)}</td>
-                                        <td class="small text-muted">${escapeHtml(c.comp.UsageGuide || c.comp.SummaryZh || "")} <span class="badge bg-primary-subtle text-primary">${escapeHtml(ROLE_LABELS[c.role] || c.role || "")}</span></td>
-                                    </tr>`).join("")}
-                            </tbody>
-                        </table>
+                    <div class="card-body">
+                        <div class="i3d-tile-grid">
+                            ${res.additionalCandidates.map((c, cIdx) => renderModuleBrick(c, false, `gh-cand-${cIdx}-${c.comp.Id}`)).join("")}
+                        </div>
                     </div>
                 </div>
             </div>`;
@@ -452,8 +690,24 @@
             const count = new Set(Array.from(document.querySelectorAll(".comp-chk:checked")).map(c => c.value)).size;
             $("selectedCountBadge").textContent = String(count);
             $("downloadZipBtn").disabled = count === 0;
+            document.querySelectorAll(".i3d-component-card").forEach(card => {
+                const cb = card.querySelector(".comp-chk");
+                if (cb) card.classList.toggle("is-checked", cb.checked);
+            });
         };
         document.querySelectorAll(".comp-chk").forEach(c => c.addEventListener("change", updateCount));
+        document.querySelectorAll("[data-i3d-toggle]").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const target = $(btn.getAttribute("data-i3d-toggle"));
+                if (!target) return;
+                const willOpen = target.classList.contains("d-none");
+                target.classList.toggle("d-none", !willOpen);
+                btn.setAttribute("aria-expanded", willOpen ? "true" : "false");
+                const lbl = btn.querySelector("[data-i3d-toggle-label]");
+                if (lbl) lbl.textContent = willOpen ? (btn.getAttribute("data-label-open") || "收合詳情") : (btn.getAttribute("data-label-closed") || "展開詳情");
+            });
+        });
+
         updateCount();
         $("resultSection").scrollIntoView({ behavior: "smooth" });
     }
@@ -491,9 +745,12 @@
                 : t === "Skill" ? `${rootDir}/skills/${c.Name}/SKILL.md`
                 : t === "Command" ? `${rootDir}/commands/${c.Name}.md`
                 : `${rootDir}/${c.Path}`;
-            downloadTargets.push({ name: c.Name, zipPath: path, rawUrl: c.RawUrl });
+            const rawUrl = c.Path && c.Path.startsWith("builtin/")
+                ? `./builtin-ecc/${c.Path.slice("builtin/".length)}`
+                : c.RawUrl;
+            downloadTargets.push({ name: c.Name, zipPath: path, rawUrl });
 
-            if (t === "Skill" && skillAuxPaths.length > 0 && c.Path) {
+            if (t === "Skill" && skillAuxPaths.length > 0 && c.Path && !c.Path.startsWith("builtin/")) {
                 const folderPrefix = c.Path.slice(0, c.Path.lastIndexOf("/") + 1);
                 skillAuxPaths
                     .filter(p => p.startsWith(folderPrefix))
@@ -547,18 +804,222 @@
         btn.disabled = false;
     }
 
+    let catalogPage = 1;
+    const CATALOG_PAGE_SIZE = 24;
+
+    function switchView(viewName) {
+        const valid = ["dashboard", "catalog", "wizard"].includes(viewName) ? viewName : "dashboard";
+        document.querySelectorAll("[data-gh-view]").forEach(sec => {
+            sec.classList.toggle("d-none", sec.getAttribute("data-gh-view") !== valid);
+        });
+        document.querySelectorAll("[data-gh-tab]").forEach(link => {
+            link.classList.toggle("active", link.getAttribute("data-gh-tab") === valid);
+        });
+        if (window.location.hash !== `#${valid}`) {
+            history.replaceState(null, "", `#${valid}`);
+        }
+        if (valid === "catalog") {
+            renderCatalog();
+        }
+    }
+
+    function renderDashboard() {
+        const total = catalog.length;
+        const counts = { Agent: 0, Skill: 0, Rule: 0, Command: 0 };
+        catalog.forEach(c => {
+            const t = normType(c.ComponentType);
+            if (counts[t] !== undefined) counts[t]++;
+        });
+        const denom = Math.max(1, total);
+        if ($("dashTotalBadge")) $("dashTotalBadge").textContent = String(total);
+        if ($("dashReadyTitle")) $("dashReadyTitle").textContent = `已載入 ${total} 筆 ECC 元件（離線可用）`;
+        if ($("dashPodTotal")) $("dashPodTotal").textContent = `${total} 筆已同步元件`;
+
+        [["Agent", "Agent"], ["Skill", "Skill"], ["Rule", "Rule"], ["Command", "Command"]].forEach(([key, suffix]) => {
+            const cntEl = $(`dashCount${suffix}`);
+            const barEl = $(`dashBar${suffix}`);
+            if (cntEl) cntEl.textContent = String(counts[key]);
+            if (barEl) barEl.style.width = `${Math.min(100, Math.max(6, Math.round((counts[key] * 100) / denom)))}%`;
+        });
+    }
+
+    function renderCatalog() {
+        const grid = $("catalogGrid");
+        const pag = $("catalogPagination");
+        const summaryEl = $("catalogFilterSummary");
+        if (!grid || !pag) return;
+
+        const kw = ($("catKeyword")?.value || "").trim().toLowerCase();
+        const typeFilter = $("catType")?.value || "";
+        const roleFilter = ($("catRole")?.value || "").toLowerCase();
+        const stackFilter = ($("catStack")?.value || "").toLowerCase();
+
+        const filtered = catalog.filter(c => {
+            if (typeFilter && normType(c.ComponentType) !== typeFilter) return false;
+            if (roleFilter && !splitTokens(c.SdlcRoles).includes(roleFilter)) return false;
+            if (stackFilter && !splitTokens(c.TechStacks).includes(stackFilter)) return false;
+            if (kw) {
+                const hay = `${c.Name || ""} ${c.Path || ""} ${c.SummaryZh || ""} ${c.DescriptionEn || ""}`.toLowerCase();
+                if (!hay.includes(kw)) return false;
+            }
+            return true;
+        });
+
+        const totalPages = Math.max(1, Math.ceil(filtered.length / CATALOG_PAGE_SIZE));
+        if (catalogPage > totalPages) catalogPage = totalPages;
+        if (catalogPage < 1) catalogPage = 1;
+        const startIdx = (catalogPage - 1) * CATALOG_PAGE_SIZE;
+        const pageItems = filtered.slice(startIdx, startIdx + CATALOG_PAGE_SIZE);
+
+        if (summaryEl) {
+            summaryEl.textContent = `顯示 ${filtered.length} 筆符合元件（知識庫總計 ${catalog.length} 筆｜第 ${catalogPage} / ${totalPages} 頁）`;
+        }
+
+        if (pageItems.length === 0) {
+            grid.innerHTML = `<div class="i3d-pod justify-content-center py-5 text-muted" style="grid-column: 1 / -1;">${renderIcon3D("Inactive", "md", "查無符合元件")}<span>查無符合條件的 ECC 元件，請調整篩選條件。</span></div>`;
+        } else {
+            grid.innerHTML = pageItems.map(item => {
+                const typeName = normType(item.ComponentType);
+                const typeLower = typeName.toLowerCase();
+                const roles = (item.SdlcRoles || "").split(",").map(s => s.trim()).filter(Boolean);
+                const stacks = (item.TechStacks || "").split(",").map(s => s.trim()).filter(Boolean);
+                const summary = item.SummaryZh || item.DescriptionEn || "";
+                const drawerId = `cat-drawer-${item.Id}`;
+                const capsules = [
+                    ...roles.slice(0, 3).map(r => `<span class="i3d-micro-capsule" title="角色：${escapeHtml(r)}">${renderIcon3D(r, "xs", r)}<span>${escapeHtml(r)}</span></span>`),
+                    ...stacks.slice(0, 3).map(s => `<span class="i3d-micro-capsule" title="技術棧：${escapeHtml(s)}">${renderIcon3D(s, "xs", s)}<span>${escapeHtml(s)}</span></span>`)
+                ].join("");
+                const extra = roles.length + stacks.length > 6 ? `<span class="i3d-micro-capsule text-muted">+${roles.length + stacks.length - 6}</span>` : "";
+
+                return `
+                <article class="i3d-component-card i3d-type-${typeLower} i3d-hover-tilt">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div class="d-flex align-items-center gap-2 min-w-0">
+                            ${renderIcon3D(typeName, "md", `${typeName}：${item.Name}`)}
+                            <div class="min-w-0">
+                                <div class="fw-bold text-dark text-truncate" title="${escapeHtml(item.Name)}">${escapeHtml(item.Name)}</div>
+                                <span class="badge bg-light text-dark border small">${escapeHtml(typeName)}</span>
+                            </div>
+                        </div>
+                        <span class="badge bg-secondary-subtle text-secondary small">唯讀</span>
+                    </div>
+                    <div class="i3d-summary-clamp" title="${escapeHtml(summary)}">${escapeHtml(summary)}</div>
+                    <div class="i3d-capsule-row">${capsules}${extra}</div>
+                    <div id="${drawerId}" class="i3d-detail-drawer d-none" data-i3d-drawer>
+                        <div class="mb-1"><strong>完整摘要：</strong>${escapeHtml(summary)}</div>
+                        <div class="mb-1"><strong>檔案路徑：</strong><code>${escapeHtml(item.Path)}</code></div>
+                        <div class="mb-1"><strong>所有角色：</strong>${escapeHtml(roles.join(", ") || "-")}</div>
+                        <div class="mb-1"><strong>所有技術棧：</strong>${escapeHtml(stacks.join(", ") || "-")}</div>
+                        <div class="text-muted small fst-italic">（線上簡易版僅供唯讀瀏覽；如需編輯摘要請安裝 .NET 10 本機完整版）</div>
+                    </div>
+                    <div class="mt-auto pt-2 border-top d-flex justify-content-between align-items-center gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-i3d-toggle="${drawerId}" data-label-closed="展開詳情" data-label-open="收合詳情" aria-expanded="false" aria-controls="${drawerId}">
+                            <span data-i3d-toggle-label>展開詳情</span>
+                        </button>
+                        <a href="${escapeHtml(item.RawUrl)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-dark">Raw</a>
+                    </div>
+                </article>`;
+            }).join("");
+        }
+
+        pag.innerHTML = totalPages <= 1 ? "" : `
+            <span class="small text-muted">每頁 ${CATALOG_PAGE_SIZE} 筆｜目前第 ${catalogPage} / ${totalPages} 頁</span>
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-secondary" id="catPrevBtn" ${catalogPage <= 1 ? "disabled" : ""}>上一頁</button>
+                <button type="button" class="btn btn-outline-secondary" id="catNextBtn" ${catalogPage >= totalPages ? "disabled" : ""}>下一頁</button>
+            </div>`;
+        if ($("catPrevBtn")) $("catPrevBtn").addEventListener("click", () => { catalogPage--; renderCatalog(); grid.scrollIntoView({ behavior: "smooth" }); });
+        if ($("catNextBtn")) $("catNextBtn").addEventListener("click", () => { catalogPage++; renderCatalog(); grid.scrollIntoView({ behavior: "smooth" }); });
+    }
+
+    function initDashboardAndCatalog() {
+        document.querySelectorAll("[data-gh-tab], [data-gh-goto]").forEach(el => {
+            el.addEventListener("click", (e) => {
+                e.preventDefault();
+                const target = el.getAttribute("data-gh-tab") || el.getAttribute("data-gh-goto") || "dashboard";
+                switchView(target);
+            });
+        });
+
+        window.addEventListener("hashchange", () => {
+            const hash = (window.location.hash || "#dashboard").replace(/^#/, "");
+            switchView(hash);
+        });
+
+        document.querySelectorAll("[data-dash-type]").forEach(card => {
+            const go = () => {
+                const t = card.getAttribute("data-dash-type") || "";
+                if ($("catKeyword")) $("catKeyword").value = "";
+                if ($("catRole")) $("catRole").value = "";
+                if ($("catStack")) $("catStack").value = "";
+                if ($("catType")) $("catType").value = t;
+                catalogPage = 1;
+                switchView("catalog");
+            };
+            card.addEventListener("click", go);
+            card.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    go();
+                }
+            });
+        });
+
+        ["catKeyword", "catType", "catRole", "catStack"].forEach(id => {
+            const el = $(id);
+            if (!el) return;
+            const evt = id === "catKeyword" ? "input" : "change";
+            el.addEventListener(evt, () => { catalogPage = 1; renderCatalog(); });
+        });
+
+        if ($("catResetBtn")) {
+            $("catResetBtn").addEventListener("click", () => {
+                if ($("catKeyword")) $("catKeyword").value = "";
+                if ($("catType")) $("catType").value = "";
+                if ($("catRole")) $("catRole").value = "";
+                if ($("catStack")) $("catStack").value = "";
+                catalogPage = 1;
+                renderCatalog();
+            });
+        }
+
+        const grid = $("catalogGrid");
+        if (grid) {
+            grid.addEventListener("click", (e) => {
+                const btn = e.target.closest("[data-i3d-toggle]");
+                if (!btn) return;
+                const target = $(btn.getAttribute("data-i3d-toggle"));
+                if (!target) return;
+                const willOpen = target.classList.contains("d-none");
+                target.classList.toggle("d-none", !willOpen);
+                btn.setAttribute("aria-expanded", willOpen ? "true" : "false");
+                const lbl = btn.querySelector("[data-i3d-toggle-label]");
+                if (lbl) lbl.textContent = willOpen ? (btn.getAttribute("data-label-open") || "收合詳情") : (btn.getAttribute("data-label-closed") || "展開詳情");
+            });
+        }
+
+        const initialHash = (window.location.hash || "#dashboard").replace(/^#/, "");
+        switchView(initialHash);
+    }
+
     async function init() {
+        hydrateStaticIcons();
         renderCheckboxes();
+        initTactileSelectors();
         applyCompatibility();
         refreshGeminiBadge();
+        initDashboardAndCatalog();
         $("ProjectType").addEventListener("change", applyCompatibility);
 
         try {
             const res = await fetch("data/catalog.json");
             catalog = await res.json();
             $("catalogCountBadge").textContent = `已載入 ${catalog.length} 筆 ECC 元件`;
+            renderDashboard();
+            renderCatalog();
         } catch {
             $("catalogCountBadge").textContent = "知識庫載入失敗";
+            if ($("dashReadyTitle")) $("dashReadyTitle").textContent = "知識庫載入失敗";
         }
 
         $("saveGeminiKeyBtn").addEventListener("click", () => {
@@ -593,6 +1054,7 @@
                         if (!cb.disabled) cb.checked = det.stacks.includes(cb.value);
                     });
                 }
+                syncAllSelectors();
                 const [env, b, f, t, s] = inferCommands(det.projectType, det.stacks);
                 $("optTargetEnvironment").value = env;
                 $("optBuildCommand").value = b;
@@ -626,7 +1088,7 @@
                 renderResult(res);
             } finally {
                 btn.disabled = false;
-                btn.textContent = "產生精選推薦與組建 Harness";
+                btn.innerHTML = `${renderIcon3D("Bundle", "xs", "產生推薦")}<span>產生精選推薦與組建 Harness</span>`;
             }
         });
 

@@ -2,6 +2,8 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using ECCSELECTION.Tests.Helpers;
+using ECCSELECTION.Web.Data;
+using ECCSELECTION.Web.Models;
 using ECCSELECTION.Web.Models.Enums;
 using ECCSELECTION.Web.Options;
 using ECCSELECTION.Web.Services;
@@ -84,6 +86,97 @@ public class GitHubSyncServiceTests
         Assert.False(removedVerify.IsActive); // 軟刪除
     }
 
+    [Fact]
+    public async Task SyncAsync_SingleFileTimeout_DegradesToPartialSuccessAndRecordsError()
+    {
+        using var dbScope = new TestDbContextScope();
+        var handler = new FakeGitHubHttpMessageHandler();
+        handler.SetTree(
+            ("agents/architect.md", "blob", "sha-arch"),
+            ("agents/timeout-agent.md", "blob", "sha-timeout"));
+        handler.SetRaw("agents/architect.md", "---\nname: architect\ndescription: Arch\n---\nBody");
+        handler.SetTimeout("agents/timeout-agent.md");
+
+        var syncService = CreateSyncService(dbScope, handler);
+
+        var log = await syncService.SyncAsync();
+
+        Assert.Equal(SyncStatus.PartialSuccess, log.Status);
+        Assert.Equal(1, log.AddedCount);
+        Assert.Contains("timeout-agent.md", log.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SyncAsync_TreeFetchFailsWithPendingDbChanges_PersistsFailedSyncLog()
+    {
+        using var dbScope = new TestDbContextScope();
+        dbScope.Context.EccComponents.Add(new Web.Models.EccComponent
+        {
+            ComponentType = ComponentType.Rule,
+            Name = "unsaved-rule",
+            Path = "rules/unsaved.md",
+            Sha = "sha-unsaved",
+            IsActive = true
+        });
+        // Intentionally do NOT call SaveChangesAsync() before SyncAsync()
+
+        var handler = new FakeGitHubHttpMessageHandler();
+        handler.FailTreeWith(HttpStatusCode.InternalServerError);
+
+        var syncService = CreateSyncService(dbScope, handler);
+
+        var log = await syncService.SyncAsync();
+
+        Assert.Equal(SyncStatus.Failed, log.Status);
+        Assert.False(string.IsNullOrWhiteSpace(log.ErrorMessage));
+
+        var savedLog = await dbScope.Context.SyncLogs.SingleAsync();
+        Assert.Equal(SyncStatus.Failed, savedLog.Status);
+        Assert.False(string.IsNullOrWhiteSpace(savedLog.ErrorMessage));
+    }
+
+    [Fact]
+    public async Task SyncAsync_PreservesBuiltInRobloxComponentsWhenMissingFromUpstreamTree()
+    {
+        using var dbScope = new TestDbContextScope();
+        await BuiltInEccSeeder.SeedAsync(dbScope.Context);
+
+        dbScope.Context.EccComponents.Add(new EccComponent
+        {
+            ComponentType = ComponentType.Command,
+            Name = "obsolete-upstream",
+            Path = "commands/obsolete-upstream.md",
+            Sha = "sha-obsolete",
+            RawUrl = "https://raw.githubusercontent.com/affaan-m/ECC/main/commands/obsolete-upstream.md",
+            HtmlUrl = "https://github.com/affaan-m/ECC/blob/main/commands/obsolete-upstream.md",
+            IsActive = true
+        });
+        await dbScope.Context.SaveChangesAsync();
+
+        var handler = new FakeGitHubHttpMessageHandler();
+        handler.SetTree(("agents/architect.md", "blob", "sha-arch-1"));
+        handler.SetRaw("agents/architect.md", "---\nname: architect\ndescription: Arch v1\n---\nBody");
+
+        var syncService = CreateSyncService(dbScope, handler);
+        var log = await syncService.SyncAsync();
+
+        Assert.Equal(SyncStatus.Success, log.Status);
+        Assert.Equal(1, log.AddedCount);
+        Assert.Equal(1, log.RemovedCount);
+
+        var robloxComponents = await dbScope.Context.EccComponents
+            .AsNoTracking()
+            .Where(c => c.Path.StartsWith("builtin/roblox/"))
+            .ToListAsync();
+        Assert.Equal(13, robloxComponents.Count);
+        Assert.All(robloxComponents, c => Assert.True(c.IsActive));
+
+        var removedUpstream = await dbScope.Context.EccComponents
+            .AsNoTracking()
+            .SingleAsync(c => c.Path == "commands/obsolete-upstream.md");
+        Assert.False(removedUpstream.IsActive);
+    }
+
     private static GitHubSyncService CreateSyncService(TestDbContextScope dbScope, FakeGitHubHttpMessageHandler handler)
     {
         var httpClient = new HttpClient(handler);
@@ -114,11 +207,17 @@ public class GitHubSyncServiceTests
     private sealed class FakeGitHubHttpMessageHandler : HttpMessageHandler
     {
         private readonly Dictionary<string, string> _rawContents = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _timeoutPaths = new(StringComparer.OrdinalIgnoreCase);
+        private HttpStatusCode? _treeFailureStatus;
         private string _treeJson = "{\"tree\":[]}";
 
         public int RawRequestCount { get; private set; }
 
         public void ResetCounters() => RawRequestCount = 0;
+
+        public void FailTreeWith(HttpStatusCode statusCode) => _treeFailureStatus = statusCode;
+
+        public void SetTimeout(string path) => _timeoutPaths.Add(path);
 
         public void SetTree(params (string Path, string Type, string Sha)[] items)
         {
@@ -140,6 +239,11 @@ public class GitHubSyncServiceTests
 
             if (uri.Contains("api.github.com/repos/", StringComparison.OrdinalIgnoreCase))
             {
+                if (_treeFailureStatus.HasValue)
+                {
+                    return Task.FromResult(new HttpResponseMessage(_treeFailureStatus.Value));
+                }
+
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent(_treeJson, Encoding.UTF8, "application/json")
@@ -152,6 +256,11 @@ public class GitHubSyncServiceTests
                 const string marker = "/main/";
                 var idx = uri.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
                 var path = idx >= 0 ? uri[(idx + marker.Length)..] : uri;
+
+                if (_timeoutPaths.Contains(path))
+                {
+                    throw new TaskCanceledException("Simulated request timeout.");
+                }
 
                 if (_rawContents.TryGetValue(path, out var content))
                 {

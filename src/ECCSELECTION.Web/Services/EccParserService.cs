@@ -257,6 +257,10 @@ public class EccParserService : IEccParserService
         {
             stacks.Add("dotnet");
         }
+        if (normalizedPath.StartsWith("builtin/roblox/", StringComparison.Ordinal) || normalizedPath.StartsWith("rules/luau/", StringComparison.Ordinal))
+        {
+            stacks.Add("luau");
+        }
 
         foreach (var (stack, pattern) in TechStackPatterns)
         {
@@ -326,6 +330,10 @@ public class EccParserService : IEccParserService
         if (Regex.IsMatch(sample, @"\bmvvm\b", RegexOptions.IgnoreCase))
         {
             styles.Add("mvvm");
+        }
+        if (Regex.IsMatch(sample, @"\b(ecs|entity[-_\s]component)\b", RegexOptions.IgnoreCase))
+        {
+            styles.Add("ecs");
         }
 
         if (styles.Count == 0)

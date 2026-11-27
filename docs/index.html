@@ -5,40 +5,283 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ECC Harness Studio — AI Harness 智慧選型與防堵卡點組建器</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="css/icon3d.css" />
 </head>
-<body class="bg-light">
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+<body class="i3d-body bg-spatial">
+    <nav class="navbar navbar-expand-lg navbar-dark i3d-navbar shadow-sm">
         <div class="container">
-            <a class="navbar-brand fw-bold" href="#">ECC Harness Studio <span class="badge bg-info text-dark ms-1">線上簡易版</span></a>
-            <div class="d-flex align-items-center gap-2">
-                <span class="text-light small d-none d-md-inline" id="catalogCountBadge">載入知識庫中...</span>
-                <button type="button" class="btn btn-warning btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#installFullModal">
-                    下載安裝完整版（.NET 10 本機版）
-                </button>
+            <a class="navbar-brand fw-bold d-inline-flex align-items-center gap-2" href="#dashboard" data-gh-goto="dashboard">
+                <span data-icon3d="Agent:sm:ECC Harness Studio 3D 核心標誌"></span>
+                <span>ECC Harness Studio</span>
+                <span class="badge bg-info text-dark ms-1">線上簡易版</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#ghNavbar" aria-controls="ghNavbar" aria-expanded="false" aria-label="切換導覽列">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="ghNavbar">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0 gap-1">
+                    <li class="nav-item">
+                        <a class="nav-link i3d-nav-pill active" href="#dashboard" data-gh-tab="dashboard">
+                            <span data-icon3d="Fullstack:xs:Dashboard 儀表板"></span>
+                            <span>Dashboard 儀表板</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link i3d-nav-pill" href="#catalog" data-gh-tab="catalog">
+                            <span data-icon3d="Rule:xs:ECC 知識庫"></span>
+                            <span>ECC 知識庫</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link i3d-nav-pill" href="#wizard" data-gh-tab="wizard">
+                            <span data-icon3d="Skill:xs:推薦問券精靈"></span>
+                            <span>推薦問券精靈</span>
+                        </a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-light small d-none d-lg-inline" id="catalogCountBadge">載入知識庫中...</span>
+                    <button type="button" class="btn btn-warning btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#installFullModal">
+                        下載安裝完整版（.NET 10 本機版）
+                    </button>
+                </div>
             </div>
         </div>
     </nav>
 
     <main class="container my-4">
-        <div class="alert alert-primary d-flex flex-wrap justify-content-between align-items-center gap-2 shadow-sm border-0">
-            <div class="small">
-                <strong>線上簡易版</strong>：使用預先同步之 620 筆 ECC 元件庫於瀏覽器本機運行（支援需求文件上傳、Gemini 雙軌精選與防堵卡點 `.zip` 打包）。如需<strong>線上 GitHub 同步（/Sync）</strong>與<strong>知識庫編輯（/Catalog）</strong>，請安裝完整版至個人電腦。
+        <section id="view-dashboard" data-gh-view="dashboard">
+            <div class="i3d-hero-panel p-4 p-md-5 mb-4">
+                <div class="row align-items-center g-4">
+                    <div class="col-lg-8">
+                        <div class="d-inline-flex align-items-center gap-2 mb-2 px-3 py-1 rounded-pill bg-primary-subtle text-primary small fw-semibold">
+                            <span data-icon3d="Bundle:xs:ECC 3D 空間儀表板"></span>
+                            <span>ECC Harness Studio 3D 空間儀表板（線上簡易版）</span>
+                        </div>
+                        <h1 class="display-6 fw-bold mb-2">ECC 知識庫與智慧選型系統</h1>
+                        <p class="text-muted mb-4">
+                            於瀏覽器本機載入預先同步的 ECC 元件庫，支援 3D 知識庫唯讀瀏覽、需求文件分析、Gemini 雙軌精選與防堵卡點 <code>.zip</code> 打包。
+                        </p>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-primary btn-lg d-inline-flex align-items-center gap-2 shadow-sm" data-gh-goto="wizard">
+                                <span data-icon3d="Agent:xs:前往推薦問券精靈"></span>
+                                <span>前往推薦問券精靈</span>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-lg d-inline-flex align-items-center gap-2" data-gh-goto="catalog">
+                                <span data-icon3d="Skill:xs:瀏覽 ECC 知識庫"></span>
+                                <span>瀏覽 ECC 知識庫 (<span id="dashTotalBadge">0</span>)</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="i3d-pod flex-column align-items-stretch">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span class="text-uppercase text-muted small fw-bold">離線知識庫就緒狀態</span>
+                                <div class="i3d-pod-pulse is-online">
+                                    <span data-icon3d="Success:md:瀏覽器端知識庫已就緒"></span>
+                                </div>
+                            </div>
+                            <div class="fw-bold text-success mt-2" id="dashReadyTitle">正在載入 catalog.json...</div>
+                            <div class="small text-muted mt-1">點擊下方任一 3D 立方柱，即可直接跳轉知識庫並篩選對應類型元件。</div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#installFullModal">
-                安裝完整版說明
-            </button>
-        </div>
 
-        <div class="card shadow-sm border-0 mb-4" id="wizardSection">
-            <div class="card-header bg-white py-3">
-                <h1 class="h4 mb-1">互動式組建問券（Harness Wizard）</h1>
-                <p class="text-muted small mb-0">說明用途或上傳需求文件，搭配 Gemini 精挑細選與 5 項防堵卡點（Guardrails），一鍵組建專案 Harness。</p>
+            <div class="row g-3 mb-4 i3d-stage">
+                <div class="col-6 col-md-3">
+                    <div class="i3d-pillar-card i3d-pillar-accent-agent i3d-hover-tilt" role="button" tabindex="0" data-dash-type="Agent" aria-label="篩選 Agent 元件">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <div class="text-muted small fw-semibold">Agents</div>
+                                <div class="small text-secondary">角色代理核心</div>
+                            </div>
+                            <div class="i3d-float"><span data-icon3d="Agent:lg:Agents 3D 神經核心立方體"></span></div>
+                        </div>
+                        <div class="fs-2 fw-bold text-primary mb-2" id="dashCountAgent">0</div>
+                        <div class="i3d-pillar-bar-track" aria-hidden="true">
+                            <div class="i3d-pillar-bar-fill bg-primary" id="dashBarAgent" style="width: 25%"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="i3d-pillar-card i3d-pillar-accent-skill i3d-hover-tilt" role="button" tabindex="0" data-dash-type="Skill" aria-label="篩選 Skill 元件">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <div class="text-muted small fw-semibold">Skills</div>
+                                <div class="small text-secondary">技能工作流</div>
+                            </div>
+                            <div class="i3d-float"><span data-icon3d="Skill:lg:Skills 3D 工作流棱鏡"></span></div>
+                        </div>
+                        <div class="fs-2 fw-bold text-success mb-2" id="dashCountSkill">0</div>
+                        <div class="i3d-pillar-bar-track" aria-hidden="true">
+                            <div class="i3d-pillar-bar-fill bg-success" id="dashBarSkill" style="width: 25%"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="i3d-pillar-card i3d-pillar-accent-rule i3d-hover-tilt" role="button" tabindex="0" data-dash-type="Rule" aria-label="篩選 Rule 元件">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <div class="text-muted small fw-semibold">Rules</div>
+                                <div class="small text-secondary">開發規範防線</div>
+                            </div>
+                            <div class="i3d-float"><span data-icon3d="Rule:lg:Rules 3D 防禦盾牌"></span></div>
+                        </div>
+                        <div class="fs-2 fw-bold text-warning mb-2" id="dashCountRule">0</div>
+                        <div class="i3d-pillar-bar-track" aria-hidden="true">
+                            <div class="i3d-pillar-bar-fill bg-warning" id="dashBarRule" style="width: 25%"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="i3d-pillar-card i3d-pillar-accent-command i3d-hover-tilt" role="button" tabindex="0" data-dash-type="Command" aria-label="篩選 Command 元件">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <div class="text-muted small fw-semibold">Commands</div>
+                                <div class="small text-secondary">快速終端指令</div>
+                            </div>
+                            <div class="i3d-float"><span data-icon3d="Command:lg:Commands 3D 終端機鍵帽"></span></div>
+                        </div>
+                        <div class="fs-2 fw-bold text-info mb-2" id="dashCountCommand">0</div>
+                        <div class="i3d-pillar-bar-track" aria-hidden="true">
+                            <div class="i3d-pillar-bar-fill bg-info" id="dashBarCommand" style="width: 25%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <h2 class="h6 fw-bold text-muted text-uppercase mb-2">系統環境狀態燈塔（Telemetry Pods）</h2>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="i3d-pod i3d-hover-tilt">
+                        <div class="i3d-pod-pulse is-online">
+                            <span data-icon3d="API:md:知識庫資料來源"></span>
+                        </div>
+                        <div>
+                            <div class="small text-muted">靜態知識庫總筆數</div>
+                            <div class="fw-bold text-dark" id="dashPodTotal">載入中...</div>
+                            <span class="badge bg-primary-subtle text-primary mt-1">瀏覽器端唯讀索引</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="i3d-pod i3d-hover-tilt">
+                        <div class="i3d-pod-pulse is-online">
+                            <span data-icon3d="Bundle:md:離線推薦與 ZIP 打包"></span>
+                        </div>
+                        <div>
+                            <div class="small text-muted">離線推薦與 ZIP 打包</div>
+                            <div class="fw-bold text-success">已就緒（JSZip + 確定性引擎）</div>
+                            <span class="badge bg-success-subtle text-success mt-1">支援 Gemini 雙軌精選</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="i3d-pod i3d-hover-tilt" role="button" tabindex="0" data-bs-toggle="modal" data-bs-target="#installFullModal">
+                        <div class="i3d-pod-pulse">
+                            <span data-icon3d="Llm:md:本機完整版安裝入口"></span>
+                        </div>
+                        <div>
+                            <div class="small text-muted">需要 /Catalog/Edit 與 /Sync？</div>
+                            <div class="fw-bold text-primary">安裝 .NET 10 本機完整版</div>
+                            <span class="badge bg-warning-subtle text-warning-emphasis mt-1">含 SQLite 編輯與 GitHub 同步</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="view-catalog" data-gh-view="catalog" class="d-none">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+                <div class="d-flex align-items-center gap-3">
+                    <span data-icon3d="Rule:md:ECC 3D 知識庫"></span>
+                    <div>
+                        <h2 class="h4 mb-0 fw-bold">ECC 元件知識庫（3D 唯讀瀏覽）</h2>
+                        <p class="text-muted small mb-0" id="catalogFilterSummary">載入中...</p>
+                    </div>
+                </div>
+                <span class="badge bg-secondary-subtle text-secondary border">唯讀模式（編輯摘要與同步請安裝本機完整版）</span>
+            </div>
+
+            <div class="card card-body shadow-sm border-0 mb-4 rounded-4">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label for="catKeyword" class="form-label small fw-semibold">關鍵字搜尋</label>
+                        <input type="text" id="catKeyword" class="form-control" placeholder="名稱、路徑或摘要..." />
+                    </div>
+                    <div class="col-md-2">
+                        <label for="catType" class="form-label small fw-semibold">元件類型</label>
+                        <select id="catType" class="form-select">
+                            <option value="">全部類型</option>
+                            <option value="Agent">Agent</option>
+                            <option value="Skill">Skill</option>
+                            <option value="Rule">Rule</option>
+                            <option value="Command">Command</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="catRole" class="form-label small fw-semibold">SDLC 角色</label>
+                        <select id="catRole" class="form-select">
+                            <option value="">全部角色</option>
+                            <option value="SA">SA</option>
+                            <option value="SD">SD</option>
+                            <option value="PG_FE">PG_FE</option>
+                            <option value="PG_BE">PG_BE</option>
+                            <option value="PG_DB">PG_DB</option>
+                            <option value="PG_TEST">PG_TEST</option>
+                            <option value="QA">QA</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="catStack" class="form-label small fw-semibold">技術棧</label>
+                        <select id="catStack" class="form-select">
+                            <option value="">全部技術棧</option>
+                            <option value="common">common</option>
+                            <option value="dotnet">dotnet</option>
+                            <option value="kotlin">kotlin</option>
+                            <option value="react">react</option>
+                            <option value="vue">vue</option>
+                            <option value="typescript">typescript</option>
+                            <option value="python">python</option>
+                            <option value="go">go</option>
+                            <option value="java">java</option>
+                            <option value="luau">luau</option>
+                            <option value="godot">godot</option>
+                            <option value="cpp">cpp</option>
+                            <option value="sqlserver">sqlserver</option>
+                            <option value="sqlite">sqlite</option>
+                            <option value="postgres">postgres</option>
+                            <option value="mysql">mysql</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex gap-2">
+                        <button type="button" id="catResetBtn" class="btn btn-outline-secondary w-100">重設條件</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="catalogGrid" class="i3d-tile-grid mb-4"></div>
+            <div id="catalogPagination" class="d-flex justify-content-between align-items-center flex-wrap gap-2"></div>
+        </section>
+
+        <section id="view-wizard" data-gh-view="wizard" class="d-none">
+        <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4" id="wizardSection">
+            <div class="card-header bg-white py-3 d-flex align-items-center gap-3">
+                <span data-icon3d="Wizard:lg:互動式組建問券 3D 圖騰"></span>
+                <div>
+                    <h1 class="h4 mb-1 fw-bold">互動式組建問券（3D Tactile Harness Wizard）</h1>
+                    <p class="text-muted small mb-0">點擊 3D 觸控方塊選擇專案型態、技術棧與 5 項防堵卡點（Guardrails），一鍵組建專案 Harness。</p>
+                </div>
             </div>
             <div class="card-body">
-                <div class="card border border-primary-subtle bg-light-subtle mb-4">
+                <div class="card border border-primary-subtle bg-light-subtle mb-4 rounded-4">
                     <div class="card-body">
                         <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
-                            <h2 class="h6 fw-bold mb-0 text-primary">0. 專案用途說明與需求文件上傳（選填）</h2>
+                            <h2 class="h6 fw-bold mb-0 text-primary d-inline-flex align-items-center gap-2">
+                                <span data-icon3d="Llm:xs:需求分析引擎"></span>
+                                <span>0. 專案用途說明與需求文件上傳（選填）</span>
+                            </h2>
                             <button type="button" class="btn btn-sm btn-outline-primary" id="analyzeReqBtn">
                                 分析需求並自動建議條件
                             </button>
@@ -98,38 +341,127 @@
                 </div>
 
                 <div class="row g-4">
-                    <div class="col-md-3">
+                    <div class="col-12">
                         <label for="ProjectType" class="form-label fw-semibold">1. 專案型態</label>
-                        <select id="ProjectType" class="form-select">
+                        <select id="ProjectType" class="form-select visually-hidden" aria-hidden="true" tabindex="-1">
                             <option value="Web">Web（網站應用）</option>
                             <option value="Mobile">Mobile（行動裝置 App）</option>
                             <option value="API">API（後端微服務）</option>
                             <option value="Fullstack">Fullstack（前後端全端）</option>
                             <option value="Game">Game（遊戲開發 / Roblox / Unity / Godot）</option>
                         </select>
+                        <div class="row g-2">
+                            <div class="col-6 col-md-4 col-lg">
+                                <div class="i3d-selector-tile is-selected" role="button" tabindex="0" data-select-target="ProjectType" data-select-value="Web" aria-pressed="true" aria-label="專案型態：Web">
+                                    <span data-icon3d="Web:md:Web 3D 圖示"></span>
+                                    <div><div class="i3d-tile-title">Web</div><div class="i3d-tile-sub">網站應用</div></div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4 col-lg">
+                                <div class="i3d-selector-tile" role="button" tabindex="0" data-select-target="ProjectType" data-select-value="Mobile" aria-pressed="false" aria-label="專案型態：Mobile">
+                                    <span data-icon3d="Mobile:md:Mobile 3D 圖示"></span>
+                                    <div><div class="i3d-tile-title">Mobile</div><div class="i3d-tile-sub">行動裝置 App</div></div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4 col-lg">
+                                <div class="i3d-selector-tile" role="button" tabindex="0" data-select-target="ProjectType" data-select-value="API" aria-pressed="false" aria-label="專案型態：API">
+                                    <span data-icon3d="API:md:API 3D 圖示"></span>
+                                    <div><div class="i3d-tile-title">API</div><div class="i3d-tile-sub">後端微服務</div></div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4 col-lg">
+                                <div class="i3d-selector-tile" role="button" tabindex="0" data-select-target="ProjectType" data-select-value="Fullstack" aria-pressed="false" aria-label="專案型態：Fullstack">
+                                    <span data-icon3d="Fullstack:md:Fullstack 3D 圖示"></span>
+                                    <div><div class="i3d-tile-title">Fullstack</div><div class="i3d-tile-sub">前後端全端</div></div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4 col-lg">
+                                <div class="i3d-selector-tile" role="button" tabindex="0" data-select-target="ProjectType" data-select-value="Game" aria-pressed="false" aria-label="專案型態：Game">
+                                    <span data-icon3d="Game:md:Game 3D 圖示"></span>
+                                    <div><div class="i3d-tile-title">Game</div><div class="i3d-tile-sub">遊戲開發</div></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-md-3">
+
+                    <div class="col-lg-4">
                         <label for="ProjectLifecycle" class="form-label fw-semibold">2. 專案導入階段</label>
-                        <select id="ProjectLifecycle" class="form-select">
+                        <select id="ProjectLifecycle" class="form-select visually-hidden" aria-hidden="true" tabindex="-1">
                             <option value="Greenfield">新專案從零建置（Greenfield）</option>
                             <option value="Brownfield">舊專案導入與重構（Brownfield）</option>
                         </select>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <div class="i3d-selector-tile is-selected" role="button" tabindex="0" data-select-target="ProjectLifecycle" data-select-value="Greenfield" aria-pressed="true" aria-label="導入階段：Greenfield">
+                                    <span data-icon3d="Greenfield:sm:Greenfield 3D 圖示"></span>
+                                    <div><div class="i3d-tile-title">Greenfield</div><div class="i3d-tile-sub">新專案從零建置</div></div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="i3d-selector-tile" role="button" tabindex="0" data-select-target="ProjectLifecycle" data-select-value="Brownfield" aria-pressed="false" aria-label="導入階段：Brownfield">
+                                    <span data-icon3d="Brownfield:sm:Brownfield 3D 圖示"></span>
+                                    <div><div class="i3d-tile-title">Brownfield</div><div class="i3d-tile-sub">舊專案導入重構</div></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-md-3">
+
+                    <div class="col-lg-5">
                         <label for="ArchStyle" class="form-label fw-semibold">3. 架構風格</label>
-                        <select id="ArchStyle" class="form-select">
+                        <select id="ArchStyle" class="form-select visually-hidden" aria-hidden="true" tabindex="-1">
                             <option value="MVC">MVC</option>
                             <option value="Clean">Clean</option>
                             <option value="MVVM">MVVM</option>
                             <option value="ECS">ECS</option>
                         </select>
+                        <div class="row g-2">
+                            <div class="col-6 col-sm-3">
+                                <div class="i3d-selector-tile is-selected" role="button" tabindex="0" data-select-target="ArchStyle" data-select-value="MVC" aria-pressed="true" aria-label="架構風格：MVC">
+                                    <span data-icon3d="MVC:sm:MVC 3D 圖示"></span>
+                                    <div><div class="i3d-tile-title">MVC</div><div class="i3d-tile-sub">三層式架構</div></div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-sm-3">
+                                <div class="i3d-selector-tile" role="button" tabindex="0" data-select-target="ArchStyle" data-select-value="Clean" aria-pressed="false" aria-label="架構風格：Clean">
+                                    <span data-icon3d="Clean:sm:Clean 3D 圖示"></span>
+                                    <div><div class="i3d-tile-title">Clean</div><div class="i3d-tile-sub">領域核心分層</div></div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-sm-3">
+                                <div class="i3d-selector-tile" role="button" tabindex="0" data-select-target="ArchStyle" data-select-value="MVVM" aria-pressed="false" aria-label="架構風格：MVVM">
+                                    <span data-icon3d="MVVM:sm:MVVM 3D 圖示"></span>
+                                    <div><div class="i3d-tile-title">MVVM</div><div class="i3d-tile-sub">雙向資料綁定</div></div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-sm-3">
+                                <div class="i3d-selector-tile" role="button" tabindex="0" data-select-target="ArchStyle" data-select-value="ECS" aria-pressed="false" aria-label="架構風格：ECS">
+                                    <span data-icon3d="ECS:sm:ECS 3D 圖示"></span>
+                                    <div><div class="i3d-tile-title">ECS</div><div class="i3d-tile-sub">實體元件系統</div></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-md-3">
+
+                    <div class="col-lg-3">
                         <label for="Mode" class="form-label fw-semibold">4. 推薦模式</label>
-                        <select id="Mode" class="form-select">
+                        <select id="Mode" class="form-select visually-hidden" aria-hidden="true" tabindex="-1">
                             <option value="Compact">Compact（精簡核心）</option>
                             <option value="Comprehensive">Comprehensive（完整參考）</option>
                         </select>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <div class="i3d-selector-tile is-selected" role="button" tabindex="0" data-select-target="Mode" data-select-value="Compact" aria-pressed="true" aria-label="推薦模式：Compact">
+                                    <span data-icon3d="Compact:sm:Compact 3D 圖示"></span>
+                                    <div><div class="i3d-tile-title">Compact</div><div class="i3d-tile-sub">精簡核心</div></div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="i3d-selector-tile" role="button" tabindex="0" data-select-target="Mode" data-select-value="Comprehensive" aria-pressed="false" aria-label="推薦模式：Comprehensive">
+                                    <span data-icon3d="Comprehensive:sm:Comprehensive 3D 圖示"></span>
+                                    <div><div class="i3d-tile-title">Comprehensive</div><div class="i3d-tile-sub">完整參考</div></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="col-12">
@@ -143,8 +475,9 @@
                     </div>
 
                     <div class="col-12">
-                        <div class="card border border-warning-subtle">
-                            <div class="card-header bg-warning-subtle py-2">
+                        <div class="card border border-warning-subtle rounded-4 overflow-hidden">
+                            <div class="card-header bg-warning-subtle py-2 d-flex align-items-center gap-2">
+                                <span data-icon3d="Rule:xs:Guardrails 3D 防禦盾牌"></span>
                                 <h3 class="h6 mb-0 fw-bold">7. 專案組建參數與防堵卡點（Guardrails）</h3>
                             </div>
                             <div class="card-body">
@@ -210,13 +543,43 @@
                                 </div>
 
                                 <hr class="my-3" />
-                                <div class="small fw-semibold mb-2">啟用的強制防堵卡點（Hard Gates）：</div>
+                                <div class="small fw-semibold mb-2">啟用的強制防堵卡點（Hard Gates 3D 觸控開關）：</div>
                                 <div class="row g-2 small">
-                                    <div class="col-md-4"><label class="form-check-label"><input type="checkbox" id="chkRequireSpecFirst" class="form-check-input me-1" checked /> 規格先行卡點</label></div>
-                                    <div class="col-md-4"><label class="form-check-label"><input type="checkbox" id="chkRequireTestsBeforeDone" class="form-check-input me-1" checked /> 品質閘門腳本</label></div>
-                                    <div class="col-md-4"><label class="form-check-label"><input type="checkbox" id="chkRequireEvidenceOutput" class="form-check-input me-1" checked /> 證據輸出契約</label></div>
-                                    <div class="col-md-4"><label class="form-check-label"><input type="checkbox" id="chkIncludeGitPreCommitHook" class="form-check-input me-1" checked /> Git Pre-Commit 卡點</label></div>
-                                    <div class="col-md-4"><label class="form-check-label"><input type="checkbox" id="chkIncludeIdeAutoRules" class="form-check-input me-1" checked /> IDE 自動載入規則 &amp; Hooks</label></div>
+                                    <div class="col-md-4">
+                                        <div class="i3d-selector-tile i3d-checkbox-tile is-selected">
+                                            <input type="checkbox" id="chkRequireSpecFirst" class="form-check-input flex-shrink-0" checked />
+                                            <span data-icon3d="Playbook:xs:規格先行卡點"></span>
+                                            <label for="chkRequireSpecFirst" class="form-check-label mb-0 fw-semibold">規格先行卡點</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="i3d-selector-tile i3d-checkbox-tile is-selected">
+                                            <input type="checkbox" id="chkRequireTestsBeforeDone" class="form-check-input flex-shrink-0" checked />
+                                            <span data-icon3d="Rule:xs:品質閘門腳本"></span>
+                                            <label for="chkRequireTestsBeforeDone" class="form-check-label mb-0 fw-semibold">品質閘門腳本</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="i3d-selector-tile i3d-checkbox-tile is-selected">
+                                            <input type="checkbox" id="chkRequireEvidenceOutput" class="form-check-input flex-shrink-0" checked />
+                                            <span data-icon3d="Success:xs:證據輸出契約"></span>
+                                            <label for="chkRequireEvidenceOutput" class="form-check-label mb-0 fw-semibold">證據輸出契約</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="i3d-selector-tile i3d-checkbox-tile is-selected">
+                                            <input type="checkbox" id="chkIncludeGitPreCommitHook" class="form-check-input flex-shrink-0" checked />
+                                            <span data-icon3d="Lock:xs:Git Pre-Commit 卡點"></span>
+                                            <label for="chkIncludeGitPreCommitHook" class="form-check-label mb-0 fw-semibold">Git Pre-Commit 卡點</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <div class="i3d-selector-tile i3d-checkbox-tile is-selected">
+                                            <input type="checkbox" id="chkIncludeIdeAutoRules" class="form-check-input flex-shrink-0" checked />
+                                            <span data-icon3d="Agent:xs:IDE 自動載入規則"></span>
+                                            <label for="chkIncludeIdeAutoRules" class="form-check-label mb-0 fw-semibold">IDE 自動載入規則 &amp; Hooks</label>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -224,7 +587,10 @@
                 </div>
 
                 <div class="mt-4 d-flex gap-2">
-                    <button type="button" class="btn btn-primary btn-lg" id="generateBtn">產生精選推薦與組建 Harness</button>
+                    <button type="button" class="btn btn-primary btn-lg d-inline-flex align-items-center gap-2 shadow-sm" id="generateBtn">
+                        <span data-icon3d="Bundle:xs:產生推薦"></span>
+                        <span>產生精選推薦與組建 Harness</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -232,8 +598,10 @@
         <section id="resultSection" class="d-none">
             <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
                 <div class="d-flex flex-wrap align-items-center gap-2">
-                    <button type="button" class="btn btn-primary btn-lg" id="downloadZipBtn">
-                        組建並下載 Harness 套件 (.zip) <span class="badge bg-light text-primary ms-1" id="selectedCountBadge">0</span>
+                    <button type="button" class="btn btn-primary btn-lg d-inline-flex align-items-center gap-2 shadow-sm" id="downloadZipBtn">
+                        <span data-icon3d="Bundle:xs:下載套件"></span>
+                        <span>組建並下載 Harness 套件 (.zip)</span>
+                        <span class="badge bg-light text-primary ms-1" id="selectedCountBadge">0</span>
                     </button>
                     <span class="badge bg-dark" id="curationSourceBadge">精選來源：Deterministic</span>
                 </div>
@@ -242,17 +610,45 @@
 
             <div class="row g-3 mb-4">
                 <div class="col-lg-7">
-                    <div class="card shadow-sm border-0 h-100">
-                        <div class="card-header bg-white py-2 fw-bold small">Harness 運作說明書（將一併打包為 <code>HARNESS_PLAYBOOK.md</code>）</div>
-                        <div class="card-body py-2">
-                            <pre id="playbookPreview" class="mb-0 small bg-light p-2 rounded" style="white-space: pre-wrap; max-height: 240px; overflow-y: auto;"></pre>
+                    <div class="card shadow-sm border-0 rounded-4 h-100">
+                        <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+                            <span class="fw-bold small d-inline-flex align-items-center gap-2">
+                                <span data-icon3d="Playbook:xs:Harness Playbook"></span>
+                                <span>Harness 治理流程圖解（打包為 <code>HARNESS_PLAYBOOK.md</code>）</span>
+                            </span>
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#playbookCollapse">
+                                檢視原始 Markdown
+                            </button>
+                        </div>
+                        <div class="card-body py-3">
+                            <div class="i3d-playbook-flow mb-2" aria-label="7 步 AI 協作治理流程">
+                                <span class="i3d-flow-node"><span data-icon3d="SA:xs:SA 規格"></span> 1. SA 規格</span>
+                                <span class="i3d-flow-arrow">&rarr;</span>
+                                <span class="i3d-flow-node"><span data-icon3d="Lock:xs:人類確認"></span> 2. 人類確認</span>
+                                <span class="i3d-flow-arrow">&rarr;</span>
+                                <span class="i3d-flow-node"><span data-icon3d="PG_BE:xs:分層實作"></span> 3. 分層實作</span>
+                                <span class="i3d-flow-arrow">&rarr;</span>
+                                <span class="i3d-flow-node"><span data-icon3d="PG_TEST:xs:TDD 測試"></span> 4. TDD 測試</span>
+                                <span class="i3d-flow-arrow">&rarr;</span>
+                                <span class="i3d-flow-node"><span data-icon3d="Rule:xs:品質閘門"></span> 5. 品質閘門</span>
+                                <span class="i3d-flow-arrow">&rarr;</span>
+                                <span class="i3d-flow-node"><span data-icon3d="Web:xs:實機驗證"></span> 6. 實機驗證</span>
+                                <span class="i3d-flow-arrow">&rarr;</span>
+                                <span class="i3d-flow-node"><span data-icon3d="Success:xs:文件同步"></span> 7. 文件同步</span>
+                            </div>
+                            <div class="collapse mt-2" id="playbookCollapse">
+                                <pre id="playbookPreview" class="mb-0 small bg-light p-2 rounded border" style="white-space: pre-wrap; max-height: 220px; overflow-y: auto;"></pre>
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div class="col-lg-5">
-                    <div class="card shadow-sm border-primary-subtle h-100">
+                    <div class="card shadow-sm border-primary-subtle rounded-4 h-100">
                         <div class="card-header bg-primary-subtle py-2 d-flex justify-content-between align-items-center">
-                            <span class="fw-bold small text-primary-emphasis">Chrome 網頁版 Gemini 接力精選（免 API Key）</span>
+                            <span class="fw-bold small text-primary-emphasis d-inline-flex align-items-center gap-2">
+                                <span data-icon3d="Llm:xs:Gemini 接力"></span>
+                                <span>Chrome 網頁版 Gemini 接力精選（免 API Key）</span>
+                            </span>
                             <button class="btn btn-sm btn-primary" type="button" id="copyAndOpenGeminiBtn">複製 Prompt 並開啟 Gemini</button>
                         </div>
                         <div class="card-body py-2 small">
@@ -268,6 +664,7 @@
             <div id="suitesContainer"></div>
             <div id="additionalCandidatesContainer"></div>
         </section>
+        </section>
     </main>
 
     <!-- Install Full Version Modal -->
@@ -276,7 +673,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title fw-bold">下載並安裝 ECCSELECTION 完整版（.NET 10 本機版）</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="關閉"></button>
                 </div>
                 <div class="modal-body small">
                     <p>完整版包含 <strong>SQLite 知識庫管理（/Catalog）</strong>、<strong>GitHub 增量同步引擎（/Sync）</strong> 與 <strong>本機後端打包服務</strong>，執行於 <code>http://localhost:5109</code>。</p>
